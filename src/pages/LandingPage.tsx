@@ -55,22 +55,21 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <nav className="sona-topbar text-primary-foreground">
-        <div className="container mx-auto flex h-16 sm:h-[4.5rem] items-center px-4 sm:px-6 gap-3">
+      <nav className="border-b border-border bg-card/80 backdrop-blur-md">
+        <div className="container mx-auto flex h-14 sm:h-16 items-center px-4 sm:px-6 gap-3">
           <img src="https://www.sonatech.ac.in/images/logo.png" alt="Sona College" className="h-9 w-9 sm:h-10 sm:w-10 object-contain" />
           <div className="flex flex-col">
             <span className="font-serif text-sm sm:text-base font-bold leading-tight">Sona College of Technology</span>
-            <span className="text-[10px] sm:text-xs text-primary-foreground/80 leading-tight">An Autonomous Institution</span>
+            <span className="text-[10px] sm:text-xs text-muted-foreground leading-tight">An Autonomous Institution</span>
           </div>
         </div>
       </nav>
 
-      <main className="section-balanced flex-1 flex items-center justify-center px-4 sm:px-6">
+      <main className="flex-1 flex items-center justify-center py-10 sm:py-20 px-4 sm:px-6">
         {mode === "choice" ? (
-          <AnimateInView className="text-center max-w-3xl w-full">
-            <div className="brand-card py-7 sm:py-10">
+          <AnimateInView className="text-center max-w-2xl w-full">
             <img src="https://www.sonatech.ac.in/images/logo.png" alt="Sona College" className="h-20 w-20 sm:h-24 sm:w-24 mx-auto mb-6 object-contain" />
-            <h1 className="display-xl mb-4">Project Portal</h1>
+            <h1 className="display-xl text-3xl sm:text-4xl md:text-[3.75rem] mb-4">Project Portal</h1>
             <p className="text-muted-foreground text-base sm:text-lg mb-8 sm:mb-12 max-w-md mx-auto">
               Empowering student innovation through structured project management and institutional backing.
             </p>
@@ -93,7 +92,6 @@ const LandingPage = () => {
                   <p className="text-xs sm:text-sm text-muted-foreground">Join the project portal</p>
                 </div>
               </button>
-            </div>
             </div>
           </AnimateInView>
         ) : (

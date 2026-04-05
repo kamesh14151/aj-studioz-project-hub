@@ -124,8 +124,8 @@ const AdminDashboard = () => {
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`sona-menu-pill flex items-center gap-1.5 ${
-                tab === t.key ? "bg-secondary text-secondary-foreground" : "text-primary-foreground/80 hover:text-primary-foreground"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm transition-all ${
+                tab === t.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {t.icon}
@@ -135,7 +135,7 @@ const AdminDashboard = () => {
         </div>
       </Navbar>
 
-      <main className="section-tight flex-1 container mx-auto px-4 sm:px-6">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 py-6 sm:py-10">
         {tab === "evaluate" && (
           <AnimateInView>
             <h1 className="display-lg mb-2">Evaluation Center</h1>
