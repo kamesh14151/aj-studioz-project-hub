@@ -7,6 +7,17 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const normalizeEndpoint = (value: string) =>
+  value
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\/payments\/payments$/i, "/payments");
+
+const toPaymentsEndpoint = (value: string) => {
+  const normalized = normalizeEndpoint(value);
+  return /\/payments$/i.test(normalized) ? normalized : `${normalized}/payments`;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -44,18 +55,18 @@ serve(async (req) => {
     const resolvedSuccessUrl =
       typeof successUrl === "string" && successUrl.startsWith("http")
         ? successUrl
-        : "https://www.sonatech.ac.in";
+        : "https://aj-studioz-project-hub.vercel.app";
 
     const resolvedCancelUrl =
       typeof cancelUrl === "string" && cancelUrl.startsWith("http")
         ? cancelUrl
-        : "https://www.sonatech.ac.in";
+        : "https://aj-studioz-project-hub.vercel.app";
 
-    const configuredBase = dodoApiBaseUrl.replace(/\/$/, "");
+    const configuredBase = dodoApiBaseUrl ? normalizeEndpoint(dodoApiBaseUrl) : "";
     const configuredPaymentsEndpoint = configuredBase
-      ? (configuredBase.endsWith("/payments") ? configuredBase : `${configuredBase}/payments`)
+      ? toPaymentsEndpoint(configuredBase)
       : "";
-    const customEndpoint = (customCheckoutEndpoint || "").replace(/\/$/, "");
+    const customEndpoint = customCheckoutEndpoint ? normalizeEndpoint(customCheckoutEndpoint) : "";
 
     const endpointCandidates = [
       customEndpoint,
