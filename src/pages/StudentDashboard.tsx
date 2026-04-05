@@ -251,34 +251,35 @@ const StudentDashboard = () => {
               <h1 className="display-lg text-2xl sm:text-[2.5rem]">Component Inventory</h1>
             </div>
             <p className="text-muted-foreground text-sm sm:text-base mb-6 sm:mb-8">Pre-book hardware for your projects</p>
-            <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {inventory.map((item, i) => (
                 <AnimateInView key={item.id} delay={i * 60}>
-                  <div className="brand-card p-0 overflow-hidden h-full flex flex-col">
+                  <div className="project-card-surface p-0 overflow-hidden h-full flex flex-col">
                     {item.image_url && (
-                      <div className="aspect-[4/3] bg-muted overflow-hidden">
+                      <div className="aspect-[16/10] bg-muted overflow-hidden">
                         <img src={item.image_url} alt={item.name} className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" />
                       </div>
                     )}
-                    <div className="p-4 sm:p-5 flex flex-col flex-1">
-                      <div className="flex items-start justify-between mb-2 gap-2">
-                        <h3 className="font-serif text-sm sm:text-base leading-snug flex-1">{item.name}</h3>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground whitespace-nowrap">{item.category}</span>
+                    <div className="p-3 sm:p-4 flex flex-col flex-1">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="font-serif text-sm leading-snug flex-1">{item.name}</h3>
+                        <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-secondary text-muted-foreground whitespace-nowrap">{item.category}</span>
                       </div>
-                      <div className="flex items-center gap-3 text-xs sm:text-sm mb-4 mt-auto">
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-3 mt-auto">
+                        <span>Total: {item.total_count}</span>
                         <span className={item.available_count > 0 ? "text-foreground font-medium" : "text-destructive font-medium"}>
-                          {item.available_count > 0 ? `${item.available_count} / ${item.total_count} Available` : "Booked Out"}
+                          {item.available_count > 0 ? `${item.available_count} left` : "Booked out"}
                         </span>
                       </div>
                       <button
                         onClick={() => handlePreBook(item)}
                         disabled={item.available_count <= 0 || bookingId === item.id}
-                        className={`pill-btn text-xs gap-2 w-full ${item.available_count <= 0 ? "opacity-40 cursor-not-allowed" : ""}`}
+                        className={`inline-flex h-8 items-center justify-center rounded-md border border-border bg-foreground px-3 text-[11px] font-semibold uppercase tracking-wide text-background transition-all hover:opacity-90 active:scale-[0.98] gap-1.5 w-full ${item.available_count <= 0 ? "opacity-40 cursor-not-allowed" : ""}`}
                       >
                         {bookingId === item.id ? (
                           <><Loader2 className="h-3 w-3 animate-spin" /> Processing...</>
                         ) : item.available_count > 0 ? (
-                          <><CreditCard className="h-3 w-3" /> Pre-book &amp; Pay ₹5</>
+                          <><CreditCard className="h-3 w-3" /> Pre-book ₹5</>
                         ) : (
                           "Unavailable"
                         )}
