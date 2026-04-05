@@ -5,6 +5,8 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import AnimateInView from "@/components/AnimateInView";
 import { Lightbulb, Package, FileText, Plus, X, ShoppingCart, CreditCard, Loader2, Minus, History, Trash2 } from "lucide-react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 
 type Tab = "ideas" | "problems" | "inventory" | "orders";
@@ -39,12 +41,38 @@ interface BookingHistoryItem {
   user_id: string;
   quantity: number;
   status: string;
+  payment_status?: string;
+  payment_reference?: string | null;
+  invoice_number?: string | null;
+  order_group_id?: string | null;
+  delivery_status?: string | null;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  delivery_address?: string | null;
+  delivery_city?: string | null;
+  delivery_state?: string | null;
+  delivery_pincode?: string | null;
   created_at: string;
   inventory?: {
     name: string;
     category: string;
     image_url: string | null;
   } | null;
+}
+
+interface OrderGroup {
+  key: string;
+  invoiceNumber: string;
+  createdAt: string;
+  paymentReference: string;
+  deliveryStatus: string;
+  status: string;
+  items: Array<{ name: string; quantity: number }>;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  address: string;
 }
 
 const problemStatements = [
@@ -67,6 +95,15 @@ const StudentDashboard = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartProcessing, setCartProcessing] = useState(false);
   const [orderHistory, setOrderHistory] = useState<BookingHistoryItem[]>([]);
+  const [checkoutDetails, setCheckoutDetails] = useState({
+    contactName: "",
+    contactEmail: "",
+    contactPhone: "",
+    address: "",
+    city: "Salem",
+    state: "Tamil Nadu",
+    pincode: "636005",
+  });
 
   const fetchIdeas = async () => {
     const { data: ideasData, error: ideasError } = await supabase
@@ -112,9 +149,10 @@ const StudentDashboard = () => {
     if (!user) return;
 
     const { data: bookingData, error: bookingError } = await supabase
-      .from("bookings")
+      .from("bookings" as any)
       .select("*")
       .eq("user_id", user.id)
+      .eq("payment_status", "paid")
       .order("created_at", { ascending: false });
 
     if (bookingError) {
@@ -122,12 +160,14 @@ const StudentDashboard = () => {
       return;
     }
 
-    if (!bookingData || bookingData.length === 0) {
+    const typedBookings = (bookingData ?? []) as any[];
+
+    if (typedBookings.length === 0) {
       setOrderHistory([]);
       return;
     }
 
-    const itemIds = [...new Set(bookingData.map((booking) => booking.item_id))];
+    const itemIds = [...new Set(typedBookings.map((booking) => booking.item_id))];
     const { data: inventoryData } = await supabase
       .from("inventory")
       .select("id, name, category, image_url")
@@ -136,12 +176,21 @@ const StudentDashboard = () => {
     const inventoryMap = new Map((inventoryData ?? []).map((item) => [item.id, item]));
 
     setOrderHistory(
-      bookingData.map((booking) => ({
+      typedBookings.map((booking) => ({
         ...booking,
         inventory: inventoryMap.get(booking.item_id) ?? null,
       })) as BookingHistoryItem[]
     );
   };
+
+  useEffect(() => {
+    if (!profile && !user) return;
+    setCheckoutDetails((prev) => ({
+      ...prev,
+      contactName: prev.contactName || profile?.display_name || "",
+      contactEmail: prev.contactEmail || user?.email || "",
+    }));
+  }, [profile?.display_name, user?.email]);
 
   useEffect(() => {
     fetchIdeas();
@@ -170,6 +219,64 @@ const StudentDashboard = () => {
       supabase.removeChannel(bookingsChannel);
     };
   }, [user?.id]);
+
+  const invoiceFromGroup = (groupId: string) =>
+    `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${groupId.slice(0, 8).toUpperCase()}`;
+
+  const upsertPaidStatusFromCallback = async () => {
+    if (!user) return;
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    const orderGroupId = params.get("order_group_id");
+    const paymentReference =
+      params.get("payment_id") ||
+      params.get("transaction_id") ||
+      params.get("checkout_id") ||
+      "dodo";
+    if (!payment || !orderGroupId) return;
+
+    if (payment === "success") {
+      const { error } = await supabase
+        .from("bookings" as any)
+        .update({ payment_status: "paid", payment_reference: paymentReference })
+        .eq("user_id", user.id)
+        .eq("order_group_id", orderGroupId);
+      if (!error) toast.success("Payment successful. Order saved.");
+    }
+
+    if (payment === "cancelled") {
+      await supabase
+        .from("bookings" as any)
+        .update({ payment_status: "cancelled" })
+        .eq("user_id", user.id)
+        .eq("order_group_id", orderGroupId);
+      toast.info("Payment cancelled.");
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("payment");
+    url.searchParams.delete("order_group_id");
+    url.searchParams.delete("payment_id");
+    url.searchParams.delete("transaction_id");
+    url.searchParams.delete("checkout_id");
+    window.history.replaceState({}, "", url.toString());
+    fetchOrderHistory();
+  };
+
+  useEffect(() => {
+    upsertPaidStatusFromCallback();
+  }, [user?.id]);
+
+  const validateCheckoutDetails = () => {
+    if (!checkoutDetails.contactName.trim()) return "Contact name is required";
+    if (!checkoutDetails.contactEmail.trim()) return "Email is required";
+    if (!checkoutDetails.contactPhone.trim()) return "Phone number is required";
+    if (!checkoutDetails.address.trim()) return "Delivery address is required";
+    if (!checkoutDetails.city.trim()) return "City is required";
+    if (!checkoutDetails.state.trim()) return "State is required";
+    if (!checkoutDetails.pincode.trim()) return "Pincode is required";
+    return null;
+  };
 
   const getAvailableAfterCart = (item: InventoryItem) => {
     const inCart = cart.find((entry) => entry.item.id === item.id)?.quantity ?? 0;
@@ -204,50 +311,77 @@ const StudentDashboard = () => {
 
   const clearCart = () => setCart([]);
 
+  const startCheckout = async (cartEntries: CartItem[]) => {
+    if (!user || cartEntries.length === 0) return null;
+
+    const validationError = validateCheckoutDetails();
+    if (validationError) throw new Error(validationError);
+
+    const orderGroupId = crypto.randomUUID();
+    const invoiceNumber = invoiceFromGroup(orderGroupId);
+    const totalQty = cartEntries.reduce((sum, entry) => sum + entry.quantity, 0);
+    const itemSummary = cartEntries.map((entry) => `${entry.item.name} x${entry.quantity}`).join(", ");
+
+    const bookingRows = cartEntries.map((entry) => ({
+      item_id: entry.item.id,
+      user_id: user.id,
+      quantity: entry.quantity,
+      status: "active",
+      payment_status: "pending",
+      invoice_number: invoiceNumber,
+      order_group_id: orderGroupId,
+      contact_name: checkoutDetails.contactName.trim(),
+      contact_email: checkoutDetails.contactEmail.trim(),
+      contact_phone: checkoutDetails.contactPhone.trim(),
+      delivery_address: checkoutDetails.address.trim(),
+      delivery_city: checkoutDetails.city.trim(),
+      delivery_state: checkoutDetails.state.trim(),
+      delivery_pincode: checkoutDetails.pincode.trim(),
+    }));
+
+    const { error: bookingError } = await supabase.from("bookings" as any).insert(bookingRows as any);
+    if (bookingError) throw new Error(bookingError.message || "Unable to create pending order");
+
+    const response = await fetch("/api/checkout", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        itemName: itemSummary,
+        quantity: totalQty,
+        successUrl: `${window.location.origin}/?payment=success&order_group_id=${orderGroupId}`,
+        cancelUrl: `${window.location.origin}/?payment=cancelled&order_group_id=${orderGroupId}`,
+        customer: {
+          email: checkoutDetails.contactEmail.trim(),
+          name: checkoutDetails.contactName.trim(),
+        },
+      }),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.url) {
+      await supabase
+        .from("bookings" as any)
+        .delete()
+        .eq("user_id", user.id)
+        .eq("order_group_id", orderGroupId);
+      throw new Error(payload?.error || payload?.message || `Checkout failed with status ${response.status}`);
+    }
+
+    return payload.url as string;
+  };
+
   const checkoutCart = async () => {
     if (!user || cart.length === 0) return;
     setCartProcessing(true);
 
     try {
-      const totalQty = cart.reduce((sum, entry) => sum + entry.quantity, 0);
-      const itemSummary = cart.map((entry) => `${entry.item.name} x${entry.quantity}`).join(", ");
-
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          itemName: itemSummary,
-          quantity: totalQty,
-          successUrl: `${window.location.origin}/?payment=success`,
-          cancelUrl: `${window.location.origin}/?payment=cancelled`,
-          customer: {
-            email: user.email,
-            name: profile?.display_name || user.email?.split("@")[0] || "Student",
-          },
-        }),
-      });
-
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(payload?.error || payload?.message || `Checkout failed with status ${response.status}`);
-      }
-      if (!payload?.url) throw new Error("Checkout URL was not returned by the server");
-
-      const bookingRows = cart.map((entry) => ({
-        item_id: entry.item.id,
-        user_id: user.id,
-        quantity: entry.quantity,
-      }));
-
-      const { error: bookingError } = await supabase.from("bookings").insert(bookingRows);
-      if (bookingError) {
-        throw new Error(bookingError.message || "Unable to create booking records");
-      }
+      const checkoutUrl = await startCheckout(cart);
+      if (!checkoutUrl) throw new Error("Unable to initialize checkout");
 
       clearCart();
-      window.location.assign(payload.url);
+      window.location.assign(checkoutUrl);
     } catch (err: any) {
       toast.error(err?.message || "Unable to process cart checkout.");
     } finally {
@@ -279,44 +413,11 @@ const StudentDashboard = () => {
 
     // Then redirect to Dodo Payments checkout
     try {
-      const body = {
-        itemName: item.name,
-        quantity: 1,
-        successUrl: `${window.location.origin}/?payment=success`,
-        cancelUrl: `${window.location.origin}/?payment=cancelled`,
-        customer: {
-          email: user.email,
-          name: profile?.display_name || user.email?.split("@")[0] || "Student",
-        },
-      };
-
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-      const payload = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(payload?.error || payload?.message || `Checkout failed with status ${response.status}`);
-      }
-
-      if (!payload?.url) throw new Error("Checkout URL was not returned by the server");
-
-      // Create booking only after checkout URL is successfully created.
-      const { error: bookingError } = await supabase.from("bookings").insert({
-        item_id: item.id,
-        user_id: user.id,
-      });
-
-      if (bookingError) {
-        throw new Error(bookingError.message || "Unable to create booking record");
-      }
+      const checkoutUrl = await startCheckout([{ item, quantity: 1 }]);
+      if (!checkoutUrl) throw new Error("Unable to initialize checkout");
 
       // Use same-tab redirect to avoid popup blocking issues.
-      window.location.assign(payload.url);
+      window.location.assign(checkoutUrl);
     } catch (err: any) {
       toast.error(err?.message || `Unable to open payment checkout for ${item.name}.`);
     }
@@ -328,6 +429,72 @@ const StudentDashboard = () => {
     s === "Review" ? "status-chip status-chip-review" :
     s === "Approved" ? "status-chip status-chip-approved" :
     "status-chip status-chip-invested";
+
+  const groupedOrders: OrderGroup[] = orderHistory.reduce((acc, entry) => {
+    const key = entry.order_group_id || entry.id;
+    const existing = acc.find((group) => group.key === key);
+    const itemName = entry.inventory?.name || "Component";
+
+    if (!existing) {
+      acc.push({
+        key,
+        invoiceNumber: entry.invoice_number || `INV-${new Date(entry.created_at).toISOString().slice(0, 10).replace(/-/g, "")}-${key.slice(0, 8).toUpperCase()}`,
+        createdAt: entry.created_at,
+        paymentReference: entry.payment_reference || "dodo",
+        deliveryStatus: entry.delivery_status || "pending",
+        status: entry.payment_status || entry.status,
+        items: [{ name: itemName, quantity: entry.quantity }],
+        contactName: entry.contact_name || "-",
+        contactEmail: entry.contact_email || "-",
+        contactPhone: entry.contact_phone || "-",
+        address: `${entry.delivery_address || "-"}, ${entry.delivery_city || "-"}, ${entry.delivery_state || "-"} - ${entry.delivery_pincode || "-"}`,
+      });
+      return acc;
+    }
+
+    const existingItem = existing.items.find((item) => item.name === itemName);
+    if (existingItem) existingItem.quantity += entry.quantity;
+    else existing.items.push({ name: itemName, quantity: entry.quantity });
+
+    return acc;
+  }, [] as OrderGroup[]);
+
+  const formatDeliveryStatus = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
+
+  const downloadInvoicePdf = (order: OrderGroup) => {
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text("AJ Studioz Invoice", 14, 18);
+
+    doc.setFontSize(11);
+    doc.text(`Invoice Number: ${order.invoiceNumber}`, 14, 30);
+    doc.text(`Order Group: ${order.key}`, 14, 37);
+    doc.text(`Date: ${new Date(order.createdAt).toLocaleString()}`, 14, 44);
+    doc.text(`Payment Ref: ${order.paymentReference}`, 14, 51);
+    doc.text(`Payment Status: ${order.status}`, 14, 58);
+    doc.text(`Delivery Status: ${formatDeliveryStatus(order.deliveryStatus)}`, 14, 65);
+
+    doc.text("Bill To:", 14, 76);
+    doc.text(order.contactName, 14, 83);
+    doc.text(order.contactEmail, 14, 90);
+    doc.text(order.contactPhone, 14, 97);
+    doc.text(order.address, 14, 104, { maxWidth: 180 });
+
+    autoTable(doc, {
+      startY: 116,
+      head: [["Item", "Quantity"]],
+      body: order.items.map((item) => [item.name, String(item.quantity)]),
+      styles: { fontSize: 10 },
+    });
+
+    const totalQty = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    const totalAmount = totalQty * 5;
+    const tableBottom = (doc as any).lastAutoTable?.finalY || 130;
+    doc.text(`Total Quantity: ${totalQty}`, 14, tableBottom + 12);
+    doc.text(`Total Amount: INR ${totalAmount}`, 14, tableBottom + 19);
+
+    doc.save(`${order.invoiceNumber}.pdf`);
+  };
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "ideas", label: "Idea Hub", icon: <Lightbulb className="h-4 w-4" /> },
@@ -468,6 +635,27 @@ const StudentDashboard = () => {
               </div>
             </div>
             <p className="text-muted-foreground text-sm sm:text-base mb-6 sm:mb-8">Pre-book hardware for your projects</p>
+
+            <div className="brand-card p-4 sm:p-5 mb-6 space-y-3">
+              <h3 className="font-serif text-base sm:text-lg">Delivery Details</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input value={checkoutDetails.contactName} onChange={(e) => setCheckoutDetails((prev) => ({ ...prev, contactName: e.target.value }))}
+                  placeholder="Full name" className="rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                <input value={checkoutDetails.contactEmail} onChange={(e) => setCheckoutDetails((prev) => ({ ...prev, contactEmail: e.target.value }))}
+                  placeholder="Email" className="rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                <input value={checkoutDetails.contactPhone} onChange={(e) => setCheckoutDetails((prev) => ({ ...prev, contactPhone: e.target.value }))}
+                  placeholder="Phone" className="rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                <input value={checkoutDetails.pincode} onChange={(e) => setCheckoutDetails((prev) => ({ ...prev, pincode: e.target.value }))}
+                  placeholder="Pincode" className="rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                <input value={checkoutDetails.city} onChange={(e) => setCheckoutDetails((prev) => ({ ...prev, city: e.target.value }))}
+                  placeholder="City" className="rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                <input value={checkoutDetails.state} onChange={(e) => setCheckoutDetails((prev) => ({ ...prev, state: e.target.value }))}
+                  placeholder="State" className="rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <textarea value={checkoutDetails.address} onChange={(e) => setCheckoutDetails((prev) => ({ ...prev, address: e.target.value }))}
+                placeholder="Full delivery address" rows={2}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-none" />
+            </div>
             <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {inventory.map((item, i) => (
                 <AnimateInView key={item.id} delay={i * 60}>
@@ -548,27 +736,30 @@ const StudentDashboard = () => {
             <p className="text-muted-foreground text-sm sm:text-base mb-6 sm:mb-8">Your booking and pre-order records</p>
 
             <div className="space-y-3 sm:space-y-4">
-              {orderHistory.map((order, i) => (
-                <AnimateInView key={order.id} delay={i * 50}>
-                  <div className="brand-card p-4 sm:p-5 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      {order.inventory?.image_url && (
-                        <img src={order.inventory.image_url} alt={order.inventory.name} className="h-12 w-16 rounded-md object-cover border border-border" />
-                      )}
-                      <div className="min-w-0">
-                        <p className="font-serif text-sm sm:text-base truncate">{order.inventory?.name ?? "Component"}</p>
-                        <p className="text-xs text-muted-foreground">Qty: {order.quantity} · {new Date(order.created_at).toLocaleString()}</p>
-                      </div>
+              {groupedOrders.map((order, i) => (
+                <AnimateInView key={order.key} delay={i * 50}>
+                  <div className="brand-card p-4 sm:p-5 flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="font-serif text-sm sm:text-base">Invoice: {order.invoiceNumber}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleString()}</p>
+                      <p className="text-xs mt-1">{order.items.map((item) => `${item.name} x${item.quantity}`).join(", ")}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{order.contactName} · {order.contactPhone}</p>
+                      <p className="text-xs text-muted-foreground">{order.contactEmail}</p>
+                      <p className="text-xs text-muted-foreground">{order.address}</p>
                     </div>
-                    <span className="status-chip">{order.status}</span>
+                    <div className="text-right space-y-2">
+                      <span className="status-chip">{formatDeliveryStatus(order.deliveryStatus)}</span>
+                      <p className="text-[11px] text-muted-foreground">Payment: {order.status}</p>
+                      <button onClick={() => downloadInvoicePdf(order)} className="pill-btn-outline text-xs px-3 py-1.5">Download PDF</button>
+                    </div>
                   </div>
                 </AnimateInView>
               ))}
 
-              {orderHistory.length === 0 && (
+              {groupedOrders.length === 0 && (
                 <div className="text-center py-12 text-muted-foreground">
                   <History className="h-10 w-10 mx-auto mb-3 opacity-40" />
-                  <p>No orders yet. Add components to cart and checkout.</p>
+                  <p>No paid orders yet. Orders appear here after successful payment.</p>
                 </div>
               )}
             </div>

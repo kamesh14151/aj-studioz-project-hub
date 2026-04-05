@@ -3,10 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import AnimateInView from "@/components/AnimateInView";
-import { ClipboardCheck, TrendingUp, ChevronDown, Plus, X } from "lucide-react";
+import { ClipboardCheck, TrendingUp, ChevronDown, Plus, X, Truck } from "lucide-react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 
-type AdminTab = "evaluate" | "invest" | "inventory";
+type AdminTab = "evaluate" | "invest" | "inventory" | "orders";
 
 interface Idea {
   id: string;
@@ -27,11 +29,27 @@ interface InventoryItem {
   image_url: string | null;
 }
 
+interface PaidOrderGroup {
+  key: string;
+  invoiceNumber: string;
+  paymentReference: string;
+  createdAt: string;
+  paymentStatus: string;
+  deliveryStatus: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  address: string;
+  items: Array<{ name: string; quantity: number }>;
+}
+
 const AdminDashboard = () => {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [tab, setTab] = useState<AdminTab>("evaluate");
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [paidOrders, setPaidOrders] = useState<PaidOrderGroup[]>([]);
+  const [updatingOrderKey, setUpdatingOrderKey] = useState<string | null>(null);
   const [showAddItem, setShowAddItem] = useState(false);
   const [newItemName, setNewItemName] = useState("");
   const [newItemCategory, setNewItemCategory] = useState("");
@@ -78,9 +96,70 @@ const AdminDashboard = () => {
     if (data) setInventory(data as InventoryItem[]);
   };
 
+  const fetchPaidOrders = async () => {
+    const { data: rows, error } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("payment_status", "paid")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    const bookings = (rows ?? []) as Array<Record<string, unknown>>;
+    if (bookings.length === 0) {
+      setPaidOrders([]);
+      return;
+    }
+
+    const inventoryIds = [...new Set(bookings.map((b) => String(b.inventory_id)).filter(Boolean))];
+    const { data: inventoryRows } = await supabase.from("inventory").select("id, name").in("id", inventoryIds);
+    const inventoryMap = new Map((inventoryRows ?? []).map((item) => [item.id, item.name]));
+
+    const grouped = new Map<string, PaidOrderGroup>();
+
+    for (const booking of bookings) {
+      const orderGroupId = String(booking.order_group_id ?? booking.id);
+      const key = orderGroupId;
+      const quantity = Number(booking.quantity ?? 1);
+      const name = inventoryMap.get(String(booking.inventory_id)) ?? "Component";
+
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          key,
+          invoiceNumber: String(booking.invoice_number ?? `INV-${String(booking.id).slice(0, 8).toUpperCase()}`),
+          paymentReference: String(booking.payment_reference ?? "-"),
+          createdAt: String(booking.created_at ?? new Date().toISOString()),
+          paymentStatus: String(booking.payment_status ?? "paid"),
+          deliveryStatus: String(booking.delivery_status ?? "pending"),
+          contactName: String(booking.contact_name ?? "N/A"),
+          contactEmail: String(booking.contact_email ?? "N/A"),
+          contactPhone: String(booking.contact_phone ?? "N/A"),
+          address: [
+            booking.delivery_address,
+            booking.delivery_city,
+            booking.delivery_state,
+            booking.delivery_pincode,
+          ]
+            .map((v) => String(v ?? "").trim())
+            .filter(Boolean)
+            .join(", "),
+          items: [],
+        });
+      }
+
+      grouped.get(key)?.items.push({ name, quantity });
+    }
+
+    setPaidOrders(Array.from(grouped.values()));
+  };
+
   useEffect(() => {
     fetchIdeas();
     fetchInventory();
+    fetchPaidOrders();
 
     // Real-time subscriptions
     const ideasChannel = supabase
@@ -95,7 +174,10 @@ const AdminDashboard = () => {
 
     const bookingsChannel = supabase
       .channel("admin-bookings-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => fetchInventory())
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => {
+        fetchInventory();
+        fetchPaidOrders();
+      })
       .subscribe();
 
     return () => {
@@ -129,6 +211,60 @@ const AdminDashboard = () => {
     }
   };
 
+  const formatDeliveryStatus = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
+
+  const updateDeliveryStatus = async (orderGroupId: string, deliveryStatus: "packed" | "shipped" | "delivered") => {
+    setUpdatingOrderKey(orderGroupId);
+    const { error } = await supabase
+      .from("bookings" as any)
+      .update({ delivery_status: deliveryStatus })
+      .eq("order_group_id", orderGroupId)
+      .eq("payment_status", "paid");
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`Order marked as ${deliveryStatus}`);
+      fetchPaidOrders();
+    }
+    setUpdatingOrderKey(null);
+  };
+
+  const downloadInvoicePdf = (order: PaidOrderGroup) => {
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text("AJ Studioz Invoice", 14, 18);
+
+    doc.setFontSize(11);
+    doc.text(`Invoice Number: ${order.invoiceNumber}`, 14, 30);
+    doc.text(`Order Group: ${order.key}`, 14, 37);
+    doc.text(`Date: ${new Date(order.createdAt).toLocaleString()}`, 14, 44);
+    doc.text(`Payment Ref: ${order.paymentReference}`, 14, 51);
+    doc.text(`Payment Status: ${order.paymentStatus}`, 14, 58);
+    doc.text(`Delivery Status: ${formatDeliveryStatus(order.deliveryStatus)}`, 14, 65);
+
+    doc.text("Bill To:", 14, 76);
+    doc.text(order.contactName, 14, 83);
+    doc.text(order.contactEmail, 14, 90);
+    doc.text(order.contactPhone, 14, 97);
+    doc.text(order.address, 14, 104, { maxWidth: 180 });
+
+    autoTable(doc, {
+      startY: 116,
+      head: [["Item", "Quantity"]],
+      body: order.items.map((item) => [item.name, String(item.quantity)]),
+      styles: { fontSize: 10 },
+    });
+
+    const totalQty = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    const totalAmount = totalQty * 5;
+    const tableBottom = (doc as any).lastAutoTable?.finalY || 130;
+    doc.text(`Total Quantity: ${totalQty}`, 14, tableBottom + 12);
+    doc.text(`Total Amount: INR ${totalAmount}`, 14, tableBottom + 19);
+
+    doc.save(`${order.invoiceNumber}.pdf`);
+  };
+
   const statusClass = (s: string) =>
     s === "Review" ? "status-chip status-chip-review" :
     s === "Approved" ? "status-chip status-chip-approved" :
@@ -147,6 +283,7 @@ const AdminDashboard = () => {
             { key: "evaluate" as AdminTab, label: "Evaluation", icon: <ClipboardCheck className="h-4 w-4" /> },
             { key: "invest" as AdminTab, label: "Investments", icon: <TrendingUp className="h-4 w-4" /> },
             { key: "inventory" as AdminTab, label: "Inventory", icon: <Plus className="h-4 w-4" /> },
+            { key: "orders" as AdminTab, label: "Orders", icon: <Truck className="h-4 w-4" /> },
           ]).map((t) => (
             <button
               key={t.key}
@@ -347,6 +484,66 @@ const AdminDashboard = () => {
                 <p>No inventory items yet. Add your first one above.</p>
               </div>
             )}
+          </AnimateInView>
+        )}
+
+        {tab === "orders" && (
+          <AnimateInView>
+            <h1 className="display-lg mb-2">Paid Orders</h1>
+            <p className="text-muted-foreground text-sm sm:text-base mb-6 sm:mb-8">Delivery queue with invoice and contact details</p>
+
+            <div className="space-y-3 sm:space-y-4">
+              {paidOrders.map((order, i) => (
+                <AnimateInView key={order.key} delay={i * 60}>
+                  <div className="brand-card p-4 sm:p-5 flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="font-serif text-sm sm:text-base">{order.invoiceNumber}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleString()}</p>
+                      <p className="text-xs mt-1">{order.items.map((item) => `${item.name} x${item.quantity}`).join(", ")}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{order.contactName} · {order.contactPhone}</p>
+                      <p className="text-xs text-muted-foreground">{order.contactEmail}</p>
+                      <p className="text-xs text-muted-foreground">{order.address || "Address not provided"}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="status-chip">{formatDeliveryStatus(order.deliveryStatus)}</span>
+                      <p className="text-xs text-muted-foreground mt-2">Payment: {order.paymentStatus}</p>
+                      <p className="text-xs text-muted-foreground">Ref: {order.paymentReference}</p>
+                      <div className="mt-3 flex gap-2 justify-end flex-wrap">
+                        <button
+                          onClick={() => updateDeliveryStatus(order.key, "packed")}
+                          disabled={updatingOrderKey === order.key}
+                          className="pill-btn-outline text-xs px-2 py-1"
+                        >
+                          Packed
+                        </button>
+                        <button
+                          onClick={() => updateDeliveryStatus(order.key, "shipped")}
+                          disabled={updatingOrderKey === order.key}
+                          className="pill-btn-outline text-xs px-2 py-1"
+                        >
+                          Shipped
+                        </button>
+                        <button
+                          onClick={() => updateDeliveryStatus(order.key, "delivered")}
+                          disabled={updatingOrderKey === order.key}
+                          className="pill-btn-outline text-xs px-2 py-1"
+                        >
+                          Delivered
+                        </button>
+                      </div>
+                      <button onClick={() => downloadInvoicePdf(order)} className="pill-btn-outline text-xs px-3 py-1.5 mt-3">Download PDF</button>
+                    </div>
+                  </div>
+                </AnimateInView>
+              ))}
+
+              {paidOrders.length === 0 && (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Truck className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                  <p>No paid orders yet.</p>
+                </div>
+              )}
+            </div>
           </AnimateInView>
         )}
       </main>
