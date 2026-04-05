@@ -4,10 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import AnimateInView from "@/components/AnimateInView";
-import { Lightbulb, Package, FileText, Plus, X, ShoppingCart, CreditCard, Loader2 } from "lucide-react";
+import { Lightbulb, Package, FileText, Plus, X, ShoppingCart, CreditCard, Loader2, Minus, History, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-type Tab = "ideas" | "problems" | "inventory";
+type Tab = "ideas" | "problems" | "inventory" | "orders";
 
 interface Idea {
   id: string;
@@ -28,6 +28,25 @@ interface InventoryItem {
   image_url: string | null;
 }
 
+interface CartItem {
+  item: InventoryItem;
+  quantity: number;
+}
+
+interface BookingHistoryItem {
+  id: string;
+  item_id: string;
+  user_id: string;
+  quantity: number;
+  status: string;
+  created_at: string;
+  inventory?: {
+    name: string;
+    category: string;
+    image_url: string | null;
+  } | null;
+}
+
 const problemStatements = [
   { id: 1, title: "Waste Segregation Automation", dept: "ECE", description: "Design a sensor-based system for automated waste classification in campus bins." },
   { id: 2, title: "Smart Irrigation for Campus Garden", dept: "EEE", description: "Develop a moisture-sensing automated irrigation system for the botanical garden." },
@@ -45,6 +64,9 @@ const StudentDashboard = () => {
   const [newDesc, setNewDesc] = useState("");
   const [loading, setLoading] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cartProcessing, setCartProcessing] = useState(false);
+  const [orderHistory, setOrderHistory] = useState<BookingHistoryItem[]>([]);
 
   const fetchIdeas = async () => {
     const { data: ideasData, error: ideasError } = await supabase
@@ -86,9 +108,45 @@ const StudentDashboard = () => {
     if (data) setInventory(data as InventoryItem[]);
   };
 
+  const fetchOrderHistory = async () => {
+    if (!user) return;
+
+    const { data: bookingData, error: bookingError } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (bookingError) {
+      toast.error(bookingError.message);
+      return;
+    }
+
+    if (!bookingData || bookingData.length === 0) {
+      setOrderHistory([]);
+      return;
+    }
+
+    const itemIds = [...new Set(bookingData.map((booking) => booking.item_id))];
+    const { data: inventoryData } = await supabase
+      .from("inventory")
+      .select("id, name, category, image_url")
+      .in("id", itemIds);
+
+    const inventoryMap = new Map((inventoryData ?? []).map((item) => [item.id, item]));
+
+    setOrderHistory(
+      bookingData.map((booking) => ({
+        ...booking,
+        inventory: inventoryMap.get(booking.item_id) ?? null,
+      })) as BookingHistoryItem[]
+    );
+  };
+
   useEffect(() => {
     fetchIdeas();
     fetchInventory();
+    fetchOrderHistory();
 
     // Real-time subscriptions
     const ideasChannel = supabase
@@ -101,11 +159,101 @@ const StudentDashboard = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, () => fetchInventory())
       .subscribe();
 
+    const bookingsChannel = supabase
+      .channel("student-bookings-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => fetchOrderHistory())
+      .subscribe();
+
     return () => {
       supabase.removeChannel(ideasChannel);
       supabase.removeChannel(inventoryChannel);
+      supabase.removeChannel(bookingsChannel);
     };
-  }, []);
+  }, [user?.id]);
+
+  const getAvailableAfterCart = (item: InventoryItem) => {
+    const inCart = cart.find((entry) => entry.item.id === item.id)?.quantity ?? 0;
+    return Math.max(item.available_count - inCart, 0);
+  };
+
+  const addToCart = (item: InventoryItem) => {
+    const availableNow = getAvailableAfterCart(item);
+    if (availableNow <= 0) {
+      toast.error("No more available quantity for this component.");
+      return;
+    }
+
+    setCart((prev) => {
+      const existing = prev.find((entry) => entry.item.id === item.id);
+      if (existing) {
+        return prev.map((entry) =>
+          entry.item.id === item.id ? { ...entry, quantity: entry.quantity + 1 } : entry
+        );
+      }
+      return [...prev, { item, quantity: 1 }];
+    });
+  };
+
+  const decrementCartItem = (itemId: string) => {
+    setCart((prev) =>
+      prev
+        .map((entry) => (entry.item.id === itemId ? { ...entry, quantity: entry.quantity - 1 } : entry))
+        .filter((entry) => entry.quantity > 0)
+    );
+  };
+
+  const clearCart = () => setCart([]);
+
+  const checkoutCart = async () => {
+    if (!user || cart.length === 0) return;
+    setCartProcessing(true);
+
+    try {
+      const totalQty = cart.reduce((sum, entry) => sum + entry.quantity, 0);
+      const itemSummary = cart.map((entry) => `${entry.item.name} x${entry.quantity}`).join(", ");
+
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          itemName: itemSummary,
+          quantity: totalQty,
+          successUrl: `${window.location.origin}/?payment=success`,
+          cancelUrl: `${window.location.origin}/?payment=cancelled`,
+          customer: {
+            email: user.email,
+            name: profile?.display_name || user.email?.split("@")[0] || "Student",
+          },
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || payload?.message || `Checkout failed with status ${response.status}`);
+      }
+      if (!payload?.url) throw new Error("Checkout URL was not returned by the server");
+
+      const bookingRows = cart.map((entry) => ({
+        item_id: entry.item.id,
+        user_id: user.id,
+        quantity: entry.quantity,
+      }));
+
+      const { error: bookingError } = await supabase.from("bookings").insert(bookingRows);
+      if (bookingError) {
+        throw new Error(bookingError.message || "Unable to create booking records");
+      }
+
+      clearCart();
+      window.location.assign(payload.url);
+    } catch (err: any) {
+      toast.error(err?.message || "Unable to process cart checkout.");
+    } finally {
+      setCartProcessing(false);
+    }
+  };
 
   const handleSubmitIdea = async () => {
     if (!newTitle.trim() || !newDesc.trim() || !user) return;
@@ -185,6 +333,7 @@ const StudentDashboard = () => {
     { key: "ideas", label: "Idea Hub", icon: <Lightbulb className="h-4 w-4" /> },
     { key: "problems", label: "Problems", icon: <FileText className="h-4 w-4" /> },
     { key: "inventory", label: "Inventory", icon: <Package className="h-4 w-4" /> },
+    { key: "orders", label: "Orders", icon: <History className="h-4 w-4" /> },
   ];
 
   return (
@@ -290,9 +439,33 @@ const StudentDashboard = () => {
 
         {tab === "inventory" && (
           <AnimateInView>
-            <div className="flex items-center gap-3 mb-2">
-              <ShoppingCart className="h-6 w-6 sm:h-7 sm:w-7" />
-              <h1 className="display-lg">Component Inventory</h1>
+            <div className="flex items-start justify-between gap-4 mb-2">
+              <div className="flex items-center gap-3">
+                <ShoppingCart className="h-6 w-6 sm:h-7 sm:w-7" />
+                <h1 className="display-lg">Component Inventory</h1>
+              </div>
+              <div className="brand-card p-3 sm:p-4 min-w-[220px]">
+                <p className="text-xs text-muted-foreground mb-1">Cart</p>
+                <p className="font-semibold text-sm mb-2">
+                  {cart.reduce((sum, entry) => sum + entry.quantity, 0)} item(s) · ₹{cart.reduce((sum, entry) => sum + entry.quantity, 0) * 5}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={checkoutCart}
+                    disabled={cart.length === 0 || cartProcessing}
+                    className="pill-btn text-xs px-3 py-1.5"
+                  >
+                    {cartProcessing ? "Processing..." : "Checkout Cart"}
+                  </button>
+                  <button
+                    onClick={clearCart}
+                    disabled={cart.length === 0 || cartProcessing}
+                    className="pill-btn-outline text-xs px-3 py-1.5"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
             </div>
             <p className="text-muted-foreground text-sm sm:text-base mb-6 sm:mb-8">Pre-book hardware for your projects</p>
             <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -312,22 +485,46 @@ const StudentDashboard = () => {
                       <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-3 mt-auto">
                         <span>Total: {item.total_count}</span>
                         <span className={item.available_count > 0 ? "text-foreground font-medium" : "text-destructive font-medium"}>
-                          {item.available_count > 0 ? `${item.available_count} left` : "Booked out"}
+                          {getAvailableAfterCart(item) > 0 ? `${getAvailableAfterCart(item)} left` : "Booked out"}
                         </span>
                       </div>
-                      <button
-                        onClick={() => handlePreBook(item)}
-                        disabled={item.available_count <= 0 || bookingId === item.id}
-                        className={`inline-flex h-8 items-center justify-center rounded-md border border-border bg-foreground px-3 text-[11px] font-semibold uppercase tracking-wide text-background transition-all hover:opacity-90 active:scale-[0.98] gap-1.5 w-full ${item.available_count <= 0 ? "opacity-40 cursor-not-allowed" : ""}`}
-                      >
-                        {bookingId === item.id ? (
-                          <><Loader2 className="h-3 w-3 animate-spin" /> Processing...</>
-                        ) : item.available_count > 0 ? (
-                          <><CreditCard className="h-3 w-3" /> Pre-book ₹5</>
-                        ) : (
-                          "Unavailable"
-                        )}
-                      </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => addToCart(item)}
+                          disabled={getAvailableAfterCart(item) <= 0}
+                          className={`inline-flex h-8 items-center justify-center rounded-md border border-border bg-card px-3 text-[11px] font-semibold uppercase tracking-wide transition-all hover:opacity-90 active:scale-[0.98] gap-1.5 w-full ${getAvailableAfterCart(item) <= 0 ? "opacity-40 cursor-not-allowed" : ""}`}
+                        >
+                          + Cart
+                        </button>
+                        <button
+                          onClick={() => handlePreBook(item)}
+                          disabled={item.available_count <= 0 || bookingId === item.id}
+                          className={`inline-flex h-8 items-center justify-center rounded-md border border-border bg-foreground px-3 text-[11px] font-semibold uppercase tracking-wide text-background transition-all hover:opacity-90 active:scale-[0.98] gap-1.5 w-full ${item.available_count <= 0 ? "opacity-40 cursor-not-allowed" : ""}`}
+                        >
+                          {bookingId === item.id ? (
+                            <><Loader2 className="h-3 w-3 animate-spin" /> Processing...</>
+                          ) : item.available_count > 0 ? (
+                            <><CreditCard className="h-3 w-3" /> Buy Now</>
+                          ) : (
+                            "Unavailable"
+                          )}
+                        </button>
+                      </div>
+
+                      {cart.find((entry) => entry.item.id === item.id) && (
+                        <div className="flex items-center justify-between mt-2 text-[11px] border border-border rounded-md px-2 py-1">
+                          <span>In cart</span>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => decrementCartItem(item.id)} className="p-0.5 rounded hover:bg-muted">
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <span className="min-w-5 text-center">{cart.find((entry) => entry.item.id === item.id)?.quantity}</span>
+                            <button onClick={() => addToCart(item)} className="p-0.5 rounded hover:bg-muted">
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </AnimateInView>
@@ -336,6 +533,42 @@ const StudentDashboard = () => {
                 <div className="col-span-full text-center py-12 text-muted-foreground">
                   <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
                   <p>No inventory items available yet.</p>
+                </div>
+              )}
+            </div>
+          </AnimateInView>
+        )}
+
+        {tab === "orders" && (
+          <AnimateInView>
+            <div className="flex items-center gap-3 mb-2">
+              <History className="h-6 w-6 sm:h-7 sm:w-7" />
+              <h1 className="display-lg">Order History</h1>
+            </div>
+            <p className="text-muted-foreground text-sm sm:text-base mb-6 sm:mb-8">Your booking and pre-order records</p>
+
+            <div className="space-y-3 sm:space-y-4">
+              {orderHistory.map((order, i) => (
+                <AnimateInView key={order.id} delay={i * 50}>
+                  <div className="brand-card p-4 sm:p-5 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {order.inventory?.image_url && (
+                        <img src={order.inventory.image_url} alt={order.inventory.name} className="h-12 w-16 rounded-md object-cover border border-border" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-serif text-sm sm:text-base truncate">{order.inventory?.name ?? "Component"}</p>
+                        <p className="text-xs text-muted-foreground">Qty: {order.quantity} · {new Date(order.created_at).toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <span className="status-chip">{order.status}</span>
+                  </div>
+                </AnimateInView>
+              ))}
+
+              {orderHistory.length === 0 && (
+                <div className="text-center py-12 text-muted-foreground">
+                  <History className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                  <p>No orders yet. Add components to cart and checkout.</p>
                 </div>
               )}
             </div>
