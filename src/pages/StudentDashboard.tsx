@@ -129,13 +129,6 @@ const StudentDashboard = () => {
     if (!user || item.available_count <= 0) return;
     setBookingId(item.id);
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      toast.error("Session expired. Please sign in again.");
-      setBookingId(null);
-      return;
-    }
-
     // Then redirect to Dodo Payments checkout
     try {
       const body = {
@@ -143,40 +136,22 @@ const StudentDashboard = () => {
         quantity: 1,
         successUrl: `${window.location.origin}/?payment=success`,
         cancelUrl: `${window.location.origin}/?payment=cancelled`,
+        customer: {
+          email: user.email,
+          name: profile?.display_name || user.email?.split("@")[0] || "Student",
+        },
       };
 
-      const endpoint = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout`;
-      const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-      const doCheckoutRequest = async (accessToken: string) => {
-        const response = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            apikey: publishableKey,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(body),
-        });
-
-        const payload = await response.json().catch(() => null);
-        return { response, payload };
-      };
-
-      let { response, payload } = await doCheckoutRequest(session.access_token);
-
-      if (response.status === 401) {
-        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-        if (refreshError || !refreshed.session?.access_token) {
-          throw new Error("Session expired. Please sign in again.");
-        }
-        ({ response, payload } = await doCheckoutRequest(refreshed.session.access_token));
-      }
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Invalid JWT from Edge Function. In Supabase > Edge Functions > create-checkout > Settings, disable 'Verify JWT with legacy secret' and retry.");
-        }
         throw new Error(payload?.error || payload?.message || `Checkout failed with status ${response.status}`);
       }
 
