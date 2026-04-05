@@ -24,6 +24,7 @@ interface InventoryItem {
   category: string;
   total_count: number;
   available_count: number;
+  image_url: string | null;
 }
 
 const AdminDashboard = () => {
@@ -35,6 +36,7 @@ const AdminDashboard = () => {
   const [newItemName, setNewItemName] = useState("");
   const [newItemCategory, setNewItemCategory] = useState("");
   const [newItemTotal, setNewItemTotal] = useState("");
+  const [newItemImage, setNewItemImage] = useState("");
 
   const fetchIdeas = async () => {
     const { data } = await supabase
@@ -46,18 +48,40 @@ const AdminDashboard = () => {
 
   const fetchInventory = async () => {
     const { data } = await supabase.from("inventory").select("*").order("name");
-    if (data) setInventory(data);
+    if (data) setInventory(data as InventoryItem[]);
   };
 
   useEffect(() => {
     fetchIdeas();
     fetchInventory();
+
+    // Real-time subscriptions
+    const ideasChannel = supabase
+      .channel("admin-ideas-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "ideas" }, () => fetchIdeas())
+      .subscribe();
+
+    const inventoryChannel = supabase
+      .channel("admin-inventory-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, () => fetchInventory())
+      .subscribe();
+
+    const bookingsChannel = supabase
+      .channel("admin-bookings-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => fetchInventory())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ideasChannel);
+      supabase.removeChannel(inventoryChannel);
+      supabase.removeChannel(bookingsChannel);
+    };
   }, []);
 
   const updateStatus = async (id: string, status: string) => {
     const { error } = await supabase.from("ideas").update({ status }).eq("id", id);
     if (error) toast.error(error.message);
-    else { fetchIdeas(); setOpenDropdown(null); }
+    else setOpenDropdown(null);
   };
 
   const addInventoryItem = async () => {
@@ -68,13 +92,13 @@ const AdminDashboard = () => {
       category: newItemCategory.trim(),
       total_count: total,
       available_count: total,
+      image_url: newItemImage.trim() || null,
     });
     if (error) toast.error(error.message);
     else {
       toast.success("Item added!");
-      setNewItemName(""); setNewItemCategory(""); setNewItemTotal("");
+      setNewItemName(""); setNewItemCategory(""); setNewItemTotal(""); setNewItemImage("");
       setShowAddItem(false);
-      fetchInventory();
     }
   };
 
@@ -130,7 +154,6 @@ const AdminDashboard = () => {
               ))}
             </div>
 
-            {/* Mobile: card layout. Desktop: table layout */}
             <div className="hidden sm:block border border-border rounded-lg overflow-hidden">
               <div className="grid grid-cols-12 gap-4 px-5 py-3 bg-secondary text-sm font-medium text-muted-foreground">
                 <div className="col-span-4">Project</div>
@@ -164,7 +187,6 @@ const AdminDashboard = () => {
               ))}
             </div>
 
-            {/* Mobile cards */}
             <div className="sm:hidden space-y-3">
               {ideas.map((idea) => (
                 <div key={idea.id} className="brand-card">
@@ -206,9 +228,7 @@ const AdminDashboard = () => {
         {tab === "invest" && (
           <AnimateInView>
             <h1 className="display-lg text-2xl sm:text-[2.5rem] mb-2">Investment Portfolio</h1>
-            <p className="text-muted-foreground text-sm sm:text-base mb-6 sm:mb-8">
-              Projects selected for institutional backing
-            </p>
+            <p className="text-muted-foreground text-sm sm:text-base mb-6 sm:mb-8">Projects selected for institutional backing</p>
             {investedIdeas.length === 0 ? (
               <div className="brand-card text-center py-12">
                 <TrendingUp className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
@@ -253,12 +273,14 @@ const AdminDashboard = () => {
                   <X className="h-4 w-4" />
                 </button>
                 <h3 className="font-serif text-lg mb-4">Add Inventory Item</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <input type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} placeholder="Item name"
                     className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
                   <input type="text" value={newItemCategory} onChange={(e) => setNewItemCategory(e.target.value)} placeholder="Category"
                     className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
                   <input type="number" value={newItemTotal} onChange={(e) => setNewItemTotal(e.target.value)} placeholder="Quantity"
+                    className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  <input type="url" value={newItemImage} onChange={(e) => setNewItemImage(e.target.value)} placeholder="Image URL (optional)"
                     className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
                 </div>
                 <button onClick={addInventoryItem} className="pill-btn mt-3"
@@ -268,18 +290,25 @@ const AdminDashboard = () => {
               </div>
             )}
 
-            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {inventory.map((item, i) => (
                 <AnimateInView key={item.id} delay={i * 60}>
-                  <div className="project-card-surface p-4 sm:p-5">
-                    <div className="flex items-start justify-between mb-2 gap-2">
-                      <h3 className="font-serif text-xs sm:text-sm flex-1">{item.name}</h3>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground whitespace-nowrap">{item.category}</span>
-                    </div>
-                    <div className="text-xs sm:text-sm mt-2">
-                      <span className={item.available_count > 0 ? "text-foreground" : "text-destructive"}>
-                        {item.available_count} / {item.total_count} Available
-                      </span>
+                  <div className="brand-card p-0 overflow-hidden">
+                    {item.image_url && (
+                      <div className="aspect-[4/3] bg-muted overflow-hidden">
+                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    <div className="p-4 sm:p-5">
+                      <div className="flex items-start justify-between mb-2 gap-2">
+                        <h3 className="font-serif text-sm sm:text-base flex-1">{item.name}</h3>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground whitespace-nowrap">{item.category}</span>
+                      </div>
+                      <div className="text-xs sm:text-sm mt-2">
+                        <span className={item.available_count > 0 ? "text-foreground font-medium" : "text-destructive font-medium"}>
+                          {item.available_count} / {item.total_count} Available
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </AnimateInView>

@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import AnimateInView from "@/components/AnimateInView";
-import { Lightbulb, Package, FileText, Plus, X, ShoppingCart } from "lucide-react";
+import { Lightbulb, Package, FileText, Plus, X, ShoppingCart, CreditCard, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 type Tab = "ideas" | "problems" | "inventory";
@@ -25,6 +25,7 @@ interface InventoryItem {
   category: string;
   total_count: number;
   available_count: number;
+  image_url: string | null;
 }
 
 const problemStatements = [
@@ -43,6 +44,7 @@ const StudentDashboard = () => {
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [loading, setLoading] = useState(false);
+  const [bookingId, setBookingId] = useState<string | null>(null);
 
   const fetchIdeas = async () => {
     const { data } = await supabase
@@ -54,12 +56,28 @@ const StudentDashboard = () => {
 
   const fetchInventory = async () => {
     const { data } = await supabase.from("inventory").select("*").order("name");
-    if (data) setInventory(data);
+    if (data) setInventory(data as InventoryItem[]);
   };
 
   useEffect(() => {
     fetchIdeas();
     fetchInventory();
+
+    // Real-time subscriptions
+    const ideasChannel = supabase
+      .channel("ideas-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "ideas" }, () => fetchIdeas())
+      .subscribe();
+
+    const inventoryChannel = supabase
+      .channel("inventory-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, () => fetchInventory())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ideasChannel);
+      supabase.removeChannel(inventoryChannel);
+    };
   }, []);
 
   const handleSubmitIdea = async () => {
@@ -76,23 +94,42 @@ const StudentDashboard = () => {
       setNewTitle("");
       setNewDesc("");
       setShowNewIdea(false);
-      fetchIdeas();
     }
     setLoading(false);
   };
 
   const handlePreBook = async (item: InventoryItem) => {
     if (!user || item.available_count <= 0) return;
+    setBookingId(item.id);
+
+    // Create booking first
     const { error } = await supabase.from("bookings").insert({
       item_id: item.id,
       user_id: user.id,
     });
+
     if (error) {
       toast.error(error.message);
-    } else {
-      toast.success(`Pre-booked ${item.name}!`);
-      fetchInventory();
+      setBookingId(null);
+      return;
     }
+
+    // Then redirect to Stripe checkout
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke("create-checkout", {
+        body: { itemName: item.name, quantity: 1 },
+      });
+
+      if (fnError) throw fnError;
+      if (data?.url) {
+        window.open(data.url, "_blank");
+        toast.success(`Pre-booked ${item.name}! Complete payment to confirm.`);
+      }
+    } catch (err: any) {
+      toast.info(`Pre-booked ${item.name}! Payment link unavailable.`);
+    }
+
+    setBookingId(null);
   };
 
   const statusClass = (s: string) =>
@@ -214,26 +251,39 @@ const StudentDashboard = () => {
               <h1 className="display-lg text-2xl sm:text-[2.5rem]">Component Inventory</h1>
             </div>
             <p className="text-muted-foreground text-sm sm:text-base mb-6 sm:mb-8">Pre-book hardware for your projects</p>
-            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {inventory.map((item, i) => (
                 <AnimateInView key={item.id} delay={i * 60}>
-                  <div className="project-card-surface p-4 sm:p-5 flex flex-col h-full">
-                    <div className="flex items-start justify-between mb-2 gap-2">
-                      <h3 className="font-serif text-xs sm:text-sm leading-snug flex-1">{item.name}</h3>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground whitespace-nowrap">{item.category}</span>
+                  <div className="brand-card p-0 overflow-hidden h-full flex flex-col">
+                    {item.image_url && (
+                      <div className="aspect-[4/3] bg-muted overflow-hidden">
+                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" />
+                      </div>
+                    )}
+                    <div className="p-4 sm:p-5 flex flex-col flex-1">
+                      <div className="flex items-start justify-between mb-2 gap-2">
+                        <h3 className="font-serif text-sm sm:text-base leading-snug flex-1">{item.name}</h3>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground whitespace-nowrap">{item.category}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs sm:text-sm mb-4 mt-auto">
+                        <span className={item.available_count > 0 ? "text-foreground font-medium" : "text-destructive font-medium"}>
+                          {item.available_count > 0 ? `${item.available_count} / ${item.total_count} Available` : "Booked Out"}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handlePreBook(item)}
+                        disabled={item.available_count <= 0 || bookingId === item.id}
+                        className={`pill-btn text-xs gap-2 w-full ${item.available_count <= 0 ? "opacity-40 cursor-not-allowed" : ""}`}
+                      >
+                        {bookingId === item.id ? (
+                          <><Loader2 className="h-3 w-3 animate-spin" /> Processing...</>
+                        ) : item.available_count > 0 ? (
+                          <><CreditCard className="h-3 w-3" /> Pre-book &amp; Pay ₹5</>
+                        ) : (
+                          "Unavailable"
+                        )}
+                      </button>
                     </div>
-                    <div className="flex items-center gap-3 text-xs sm:text-sm mb-4 mt-auto">
-                      <span className={item.available_count > 0 ? "text-foreground" : "text-destructive"}>
-                        {item.available_count > 0 ? `${item.available_count} / ${item.total_count} Available` : "Booked Out"}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => handlePreBook(item)}
-                      disabled={item.available_count <= 0}
-                      className={`pill-btn text-xs ${item.available_count <= 0 ? "opacity-40 cursor-not-allowed" : ""}`}
-                    >
-                      {item.available_count > 0 ? "Pre-book" : "Unavailable"}
-                    </button>
                   </div>
                 </AnimateInView>
               ))}
