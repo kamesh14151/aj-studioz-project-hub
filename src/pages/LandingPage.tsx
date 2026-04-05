@@ -112,26 +112,26 @@ const LandingPage = () => {
                     </div>
                   </div>
 
-                  <p className="text-sm sm:text-base text-muted-foreground mb-6">
+                  <p className="body text-muted-foreground mb-6">
                     {mode === "login"
                       ? "Pick up where you left off. Track milestones, approvals, and submissions in one space."
                       : "Join the portal to pitch, build, and launch campus-led innovation with full support."}
                   </p>
 
                   <div className="grid grid-cols-2 gap-3 mb-8">
-                    <div className="rounded-xl border border-border bg-card/70 p-4">
+                    <div className="project-card-surface rounded-xl p-4">
                       <p className="text-xs text-muted-foreground">Active Projects</p>
                       <p className="text-xl font-semibold">240+</p>
                     </div>
-                    <div className="rounded-xl border border-border bg-card/70 p-4">
+                    <div className="project-card-surface rounded-xl p-4">
                       <p className="text-xs text-muted-foreground">Mentors</p>
                       <p className="text-xl font-semibold">120+</p>
                     </div>
-                    <div className="rounded-xl border border-border bg-card/70 p-4">
+                    <div className="project-card-surface rounded-xl p-4">
                       <p className="text-xs text-muted-foreground">Approval SLAs</p>
                       <p className="text-xl font-semibold">48 hrs</p>
                     </div>
-                    <div className="rounded-xl border border-border bg-card/70 p-4">
+                    <div className="project-card-surface rounded-xl p-4">
                       <p className="text-xs text-muted-foreground">Funding Tracks</p>
                       <p className="text-xl font-semibold">6+</p>
                     </div>

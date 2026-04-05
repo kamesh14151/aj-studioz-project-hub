@@ -14,18 +14,22 @@
     --popover-foreground: 40 10% 18%;
     --primary: 40 10% 18%;
     --primary-foreground: 0 0% 97%;
-    --secondary: 40 6% 90%;
+    --secondary: 0 0% 95%;
     --secondary-foreground: 40 10% 18%;
-    --muted: 40 6% 93%;
-    --muted-foreground: 40 5% 45%;
-    --accent: 40 8% 88%;
+    --muted: 40 2% 85%;
+    --muted-foreground: 40 4% 45%;
+    --accent: 40 3% 97%;
     --accent-foreground: 40 10% 18%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 40 6% 85%;
-    --input: 40 6% 85%;
+    --border: 40 3% 91%;
+    --input: 40 3% 91%;
     --ring: 40 10% 18%;
     --radius: 0.5rem;
+
+    --chip: 0 0% 95%;
+    --project-card-top: 0 0% 100%;
+    --project-card-bottom: 40 3% 97%;
 
     --footer-bg: 40 10% 12%;
     --footer-foreground: 40 6% 80%;
@@ -53,17 +57,21 @@
     --popover-foreground: 0 0% 100%;
     --primary: 0 0% 100%;
     --primary-foreground: 0 0% 6%;
-    --secondary: 0 0% 15%;
+    --secondary: 0 0% 9%;
     --secondary-foreground: 0 0% 100%;
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 60%;
+    --muted: 0 0% 16%;
+    --muted-foreground: 0 0% 81%;
     --accent: 0 0% 18%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
     --ring: 0 0% 100%;
+
+    --chip: 0 0% 16%;
+    --project-card-top: 0 0% 10%;
+    --project-card-bottom: 0 0% 8%;
 
     --footer-bg: 0 0% 4%;
     --footer-foreground: 0 0% 70%;
@@ -72,9 +80,9 @@
     --sidebar-foreground: 0 0% 100%;
     --sidebar-primary: 0 0% 100%;
     --sidebar-primary-foreground: 0 0% 6%;
-    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent: 0 0% 16%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 0 0% 20%;
+    --sidebar-border: 0 0% 16%;
     --sidebar-ring: 0 0% 100%;
   }
 }
@@ -85,6 +93,7 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    line-height: 1.7;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-serif;
@@ -95,22 +104,32 @@
   .display-xl {
     font-family: 'Libre Baskerville', serif;
     font-size: 3.75rem;
-    line-height: 1.1;
+    line-height: 1.08;
     letter-spacing: -0.025em;
   }
 
   .display-lg {
     font-family: 'Libre Baskerville', serif;
-    font-size: 2.5rem;
-    line-height: 1.15;
+    font-size: 3rem;
+    line-height: 1.1;
     letter-spacing: -0.02em;
   }
 
   .display-md {
     font-family: 'Libre Baskerville', serif;
-    font-size: 1.75rem;
-    line-height: 1.2;
+    font-size: 2.25rem;
+    line-height: 1.15;
     letter-spacing: -0.015em;
+  }
+
+  .body-lg {
+    font-size: 1.125rem;
+    line-height: 1.7;
+  }
+
+  .body {
+    font-size: 1rem;
+    line-height: 1.7;
   }
 
   .brand-wordmark {
@@ -121,19 +140,29 @@
   }
 
   .brand-card {
-    @apply bg-card border border-border rounded-lg p-6 transition-all duration-300 ease-out;
+    border-radius: 0.75rem;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    box-shadow: 0 1px 0 hsl(var(--foreground) / 0.04), 0 12px 28px hsl(var(--foreground) / 0.08);
+    @apply p-6 transition-all duration-300 ease-out;
   }
   .brand-card:hover {
-    @apply -translate-y-1 shadow-lg;
+    transform: translateY(-0.25rem);
+    border-color: hsl(var(--foreground) / 0.2);
+    box-shadow: 0 1px 0 hsl(var(--foreground) / 0.06), 0 18px 40px hsl(var(--foreground) / 0.14);
   }
 
   .project-card-surface {
-    @apply bg-card border border-border rounded-lg overflow-hidden transition-all duration-200;
+    background: linear-gradient(180deg, hsl(var(--project-card-top)) 0%, hsl(var(--project-card-bottom)) 100%);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.65), 0 12px 36px hsl(var(--foreground) / 0.08);
+    @apply border border-border rounded-lg overflow-hidden transition-all duration-200;
   }
 
   .pill-btn {
     @apply inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-medium transition-all duration-200;
-    @apply bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.97];
+    background: hsl(var(--foreground));
+    color: hsl(var(--background));
+    @apply hover:opacity-90 active:scale-[0.98];
   }
 
   .pill-btn-outline {
@@ -142,6 +171,7 @@
   }
 
   .status-chip {
+    background: hsl(var(--chip));
     @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold tracking-wide uppercase;
   }
   .status-chip-review {
