@@ -135,10 +135,10 @@ const AdminDashboard = () => {
         </div>
       </Navbar>
 
-      <main className="flex-1 container mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      <main className="section-tight flex-1 container mx-auto px-4 sm:px-6">
         {tab === "evaluate" && (
           <AnimateInView>
-            <h1 className="display-lg text-2xl sm:text-[2.5rem] mb-2">Evaluation Center</h1>
+            <h1 className="display-lg mb-2">Evaluation Center</h1>
             <p className="text-muted-foreground text-sm sm:text-base mb-6">Review all submitted project ideas</p>
 
             <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
@@ -227,7 +227,7 @@ const AdminDashboard = () => {
 
         {tab === "invest" && (
           <AnimateInView>
-            <h1 className="display-lg text-2xl sm:text-[2.5rem] mb-2">Investment Portfolio</h1>
+            <h1 className="display-lg mb-2">Investment Portfolio</h1>
             <p className="text-muted-foreground text-sm sm:text-base mb-6 sm:mb-8">Projects selected for institutional backing</p>
             {investedIdeas.length === 0 ? (
               <div className="brand-card text-center py-12">
@@ -259,7 +259,7 @@ const AdminDashboard = () => {
           <AnimateInView>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
               <div>
-                <h1 className="display-lg text-2xl sm:text-[2.5rem]">Manage Inventory</h1>
+                <h1 className="display-lg">Manage Inventory</h1>
                 <p className="text-muted-foreground text-sm sm:text-base mt-1">Add and manage college components</p>
               </div>
               <button onClick={() => setShowAddItem(true)} className="pill-btn gap-2 self-start">

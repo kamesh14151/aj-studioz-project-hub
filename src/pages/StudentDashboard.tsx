@@ -103,10 +103,14 @@ const StudentDashboard = () => {
     setBookingId(item.id);
 
     // Create booking first
-    const { error } = await supabase.from("bookings").insert({
-      item_id: item.id,
-      user_id: user.id,
-    });
+    const { data: booking, error } = await supabase
+      .from("bookings")
+      .insert({
+        item_id: item.id,
+        user_id: user.id,
+      })
+      .select("id")
+      .single();
 
     if (error) {
       toast.error(error.message);
@@ -117,16 +121,24 @@ const StudentDashboard = () => {
     // Then redirect to Stripe checkout
     try {
       const { data, error: fnError } = await supabase.functions.invoke("create-checkout", {
-        body: { itemName: item.name, quantity: 1 },
+        body: {
+          itemName: item.name,
+          quantity: 1,
+          successUrl: `${window.location.origin}/?payment=success`,
+          cancelUrl: `${window.location.origin}/?payment=cancelled`,
+        },
       });
 
-      if (fnError) throw fnError;
-      if (data?.url) {
-        window.open(data.url, "_blank");
-        toast.success(`Pre-booked ${item.name}! Complete payment to confirm.`);
-      }
+      if (fnError) throw new Error(fnError.message || "Unable to start checkout session");
+      if (!data?.url) throw new Error("Checkout URL was not returned by the server");
+
+      // Use same-tab redirect to avoid popup blocking issues.
+      window.location.assign(data.url);
     } catch (err: any) {
-      toast.info(`Pre-booked ${item.name}! Payment link unavailable.`);
+      if (booking?.id) {
+        await supabase.from("bookings").delete().eq("id", booking.id);
+      }
+      toast.error(err?.message || `Unable to open payment checkout for ${item.name}.`);
     }
 
     setBookingId(null);
@@ -162,12 +174,12 @@ const StudentDashboard = () => {
         </div>
       </Navbar>
 
-      <main className="flex-1 container mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      <main className="section-tight flex-1 container mx-auto px-4 sm:px-6">
         {tab === "ideas" && (
           <AnimateInView>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
               <div>
-                <h1 className="display-lg text-2xl sm:text-[2.5rem]">Idea Hub</h1>
+                <h1 className="display-lg">Idea Hub</h1>
                 <p className="text-muted-foreground text-sm sm:text-base mt-1">Share your project ideas</p>
               </div>
               <button onClick={() => setShowNewIdea(true)} className="pill-btn gap-2 self-start">
@@ -221,7 +233,7 @@ const StudentDashboard = () => {
 
         {tab === "problems" && (
           <AnimateInView>
-            <h1 className="display-lg text-2xl sm:text-[2.5rem] mb-2">Problem Statements</h1>
+            <h1 className="display-lg mb-2">Problem Statements</h1>
             <p className="text-muted-foreground text-sm sm:text-base mb-6 sm:mb-8">Official institutional challenges</p>
             <div className="space-y-3 sm:space-y-4">
               {problemStatements.map((ps, i) => (
@@ -248,7 +260,7 @@ const StudentDashboard = () => {
           <AnimateInView>
             <div className="flex items-center gap-3 mb-2">
               <ShoppingCart className="h-6 w-6 sm:h-7 sm:w-7" />
-              <h1 className="display-lg text-2xl sm:text-[2.5rem]">Component Inventory</h1>
+              <h1 className="display-lg">Component Inventory</h1>
             </div>
             <p className="text-muted-foreground text-sm sm:text-base mb-6 sm:mb-8">Pre-book hardware for your projects</p>
             <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

@@ -4,6 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
@@ -18,16 +19,33 @@ serve(async (req) => {
   );
 
   try {
-    const authHeader = req.headers.get("Authorization")!;
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) throw new Error("Missing authorization header");
+
     const token = authHeader.replace("Bearer ", "");
     const { data } = await supabaseClient.auth.getUser(token);
     const user = data.user;
     if (!user?.email) throw new Error("User not authenticated");
 
-    const { itemName, quantity } = await req.json();
+    const { itemName, quantity, successUrl, cancelUrl } = await req.json();
 
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-      apiVersion: "2025-08-27.basil",
+    const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!stripeSecretKey) throw new Error("Missing STRIPE_SECRET_KEY");
+
+    const stripePriceId = Deno.env.get("STRIPE_PRICE_ID") || "price_1TIgCHRHzpC6PF1T0Bu55iTz";
+
+    const resolvedSuccessUrl =
+      typeof successUrl === "string" && successUrl.startsWith("http")
+        ? successUrl
+        : "https://www.sonatech.ac.in";
+
+    const resolvedCancelUrl =
+      typeof cancelUrl === "string" && cancelUrl.startsWith("http")
+        ? cancelUrl
+        : "https://www.sonatech.ac.in";
+
+    const stripe = new Stripe(stripeSecretKey, {
+      apiVersion: "2024-06-20",
     });
 
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
@@ -41,13 +59,13 @@ serve(async (req) => {
       customer_email: customerId ? undefined : user.email,
       line_items: [
         {
-          price: "price_1TIgCHRHzpC6PF1T0Bu55iTz",
+          price: stripePriceId,
           quantity: quantity || 1,
         },
       ],
       mode: "payment",
-      success_url: `${req.headers.get("origin")}/?payment=success`,
-      cancel_url: `${req.headers.get("origin")}/?payment=cancelled`,
+      success_url: resolvedSuccessUrl,
+      cancel_url: resolvedCancelUrl,
       metadata: {
         item_name: itemName || "Hardware Component",
         user_id: user.id,
@@ -59,7 +77,8 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });

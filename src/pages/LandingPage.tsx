@@ -65,12 +65,12 @@ const LandingPage = () => {
         </div>
       </nav>
 
-      <main className="flex-1 flex items-center justify-center py-10 sm:py-16 px-4 sm:px-6">
+      <main className="section-balanced flex-1 flex items-center justify-center px-4 sm:px-6">
         {mode === "choice" ? (
           <AnimateInView className="text-center max-w-3xl w-full">
-            <div className="brand-card py-8 sm:py-10">
+            <div className="brand-card py-7 sm:py-10">
             <img src="https://www.sonatech.ac.in/images/logo.png" alt="Sona College" className="h-20 w-20 sm:h-24 sm:w-24 mx-auto mb-6 object-contain" />
-            <h1 className="display-xl text-3xl sm:text-4xl md:text-[3.75rem] mb-4">Project Portal</h1>
+            <h1 className="display-xl mb-4">Project Portal</h1>
             <p className="text-muted-foreground text-base sm:text-lg mb-8 sm:mb-12 max-w-md mx-auto">
               Empowering student innovation through structured project management and institutional backing.
             </p>
