@@ -85,6 +85,7 @@ export type Database = {
           category: string
           created_at: string
           id: string
+          image_url: string | null
           name: string
           total_count: number
         }
@@ -93,6 +94,7 @@ export type Database = {
           category: string
           created_at?: string
           id?: string
+          image_url?: string | null
           name: string
           total_count?: number
         }
@@ -101,6 +103,7 @@ export type Database = {
           category?: string
           created_at?: string
           id?: string
+          image_url?: string | null
           name?: string
           total_count?: number
         }
