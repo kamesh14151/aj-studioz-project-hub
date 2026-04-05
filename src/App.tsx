@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/AuthContext";
 import Index from "./pages/Index.tsx";
-import ProfileSettings from "./pages/ProfileSettings.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -19,7 +18,6 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
-            <Route path="/profile" element={<ProfileSettings />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
