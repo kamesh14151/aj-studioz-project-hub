@@ -154,31 +154,49 @@ const StudentDashboard = () => {
 
     // Then redirect to Dodo Payments checkout
     try {
-      const { data, error: fnError } = await supabase.functions.invoke("create-checkout", {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: {
-          itemName: item.name,
-          quantity: 1,
-          successUrl: `${window.location.origin}/?payment=success`,
-          cancelUrl: `${window.location.origin}/?payment=cancelled`,
-        },
-      });
+      const body = {
+        itemName: item.name,
+        quantity: 1,
+        successUrl: `${window.location.origin}/?payment=success`,
+        cancelUrl: `${window.location.origin}/?payment=cancelled`,
+      };
 
-      if (fnError) {
-        let detailedMessage = fnError.message || "Unable to start checkout session";
-        const context = (fnError as any)?.context;
-        if (context && typeof context.json === "function") {
-          const payload = await context.json().catch(() => null);
-          detailedMessage = payload?.error || payload?.message || detailedMessage;
+      const endpoint = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout`;
+      const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+      const doCheckoutRequest = async (accessToken: string) => {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            apikey: publishableKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+
+        const payload = await response.json().catch(() => null);
+        return { response, payload };
+      };
+
+      let { response, payload } = await doCheckoutRequest(session.access_token);
+
+      if (response.status === 401) {
+        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError || !refreshed.session?.access_token) {
+          throw new Error("Session expired. Please sign in again.");
         }
-        throw new Error(detailedMessage);
+        ({ response, payload } = await doCheckoutRequest(refreshed.session.access_token));
       }
-      if (!data?.url) throw new Error("Checkout URL was not returned by the server");
+
+      if (!response.ok) {
+        throw new Error(payload?.error || payload?.message || `Checkout failed with status ${response.status}`);
+      }
+
+      if (!payload?.url) throw new Error("Checkout URL was not returned by the server");
 
       // Use same-tab redirect to avoid popup blocking issues.
-      window.location.assign(data.url);
+      window.location.assign(payload.url);
     } catch (err: any) {
       if (booking?.id) {
         await supabase.from("bookings").delete().eq("id", booking.id);
