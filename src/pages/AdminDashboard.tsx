@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -56,6 +56,7 @@ const AdminDashboard = () => {
   const [newItemTotal, setNewItemTotal] = useState("");
   const [newItemImage, setNewItemImage] = useState("");
   const [newItemFile, setNewItemFile] = useState<File | null>(null);
+  const [newItemDragging, setNewItemDragging] = useState(false);
   const [savingItem, setSavingItem] = useState(false);
 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -65,6 +66,31 @@ const AdminDashboard = () => {
   const [editItemAvailable, setEditItemAvailable] = useState("");
   const [editItemImage, setEditItemImage] = useState("");
   const [editItemFile, setEditItemFile] = useState<File | null>(null);
+  const [editItemDragging, setEditItemDragging] = useState(false);
+
+  const newItemPreview = useMemo(() => {
+    if (newItemFile) return URL.createObjectURL(newItemFile);
+    if (newItemImage.trim()) return newItemImage.trim();
+    return "";
+  }, [newItemFile, newItemImage]);
+
+  const editItemPreview = useMemo(() => {
+    if (editItemFile) return URL.createObjectURL(editItemFile);
+    if (editItemImage.trim()) return editItemImage.trim();
+    return "";
+  }, [editItemFile, editItemImage]);
+
+  useEffect(() => {
+    return () => {
+      if (newItemPreview.startsWith("blob:")) URL.revokeObjectURL(newItemPreview);
+    };
+  }, [newItemPreview]);
+
+  useEffect(() => {
+    return () => {
+      if (editItemPreview.startsWith("blob:")) URL.revokeObjectURL(editItemPreview);
+    };
+  }, [editItemPreview]);
 
   const fetchIdeas = async () => {
     const { data: ideasData, error: ideasError } = await supabase
@@ -242,6 +268,7 @@ const AdminDashboard = () => {
       setNewItemTotal("");
       setNewItemImage("");
       setNewItemFile(null);
+      setNewItemDragging(false);
       setShowAddItem(false);
       fetchInventory();
     } catch (err: any) {
@@ -259,6 +286,7 @@ const AdminDashboard = () => {
     setEditItemAvailable(String(item.available_count));
     setEditItemImage(item.image_url || "");
     setEditItemFile(null);
+    setEditItemDragging(false);
   };
 
   const saveEditedItem = async () => {
@@ -530,8 +558,39 @@ const AdminDashboard = () => {
                     className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
                   <input type="url" value={newItemImage} onChange={(e) => setNewItemImage(e.target.value)} placeholder="Image URL (optional)"
                     className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
-                  <input type="file" accept="image/*" onChange={(e) => setNewItemFile(e.target.files?.[0] ?? null)}
-                    className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  <div className="sm:col-span-2 space-y-2">
+                    <input
+                      id="new-item-file"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setNewItemFile(e.target.files?.[0] ?? null)}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="new-item-file"
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setNewItemDragging(true);
+                      }}
+                      onDragLeave={() => setNewItemDragging(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setNewItemDragging(false);
+                        const file = e.dataTransfer.files?.[0];
+                        if (file) setNewItemFile(file);
+                      }}
+                      className={`block cursor-pointer rounded-xl border-2 border-dashed px-4 py-5 text-center text-sm transition-colors ${
+                        newItemDragging ? "border-primary bg-primary/5" : "border-border"
+                      }`}
+                    >
+                      {newItemFile ? `${newItemFile.name} selected` : "Drop image here or click to upload"}
+                    </label>
+                    {newItemPreview && (
+                      <div className="rounded-xl overflow-hidden border border-border bg-muted/40 max-w-xs">
+                        <img src={newItemPreview} alt="New item preview" className="w-full aspect-[16/10] object-cover" />
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <button onClick={addInventoryItem} className="pill-btn mt-3"
                   disabled={savingItem || !newItemName.trim() || !newItemCategory.trim() || !newItemTotal}>
@@ -557,8 +616,39 @@ const AdminDashboard = () => {
                     className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
                   <input type="url" value={editItemImage} onChange={(e) => setEditItemImage(e.target.value)} placeholder="Image URL (optional)"
                     className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
-                  <input type="file" accept="image/*" onChange={(e) => setEditItemFile(e.target.files?.[0] ?? null)}
-                    className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  <div className="sm:col-span-2 space-y-2">
+                    <input
+                      id="edit-item-file"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setEditItemFile(e.target.files?.[0] ?? null)}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="edit-item-file"
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setEditItemDragging(true);
+                      }}
+                      onDragLeave={() => setEditItemDragging(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setEditItemDragging(false);
+                        const file = e.dataTransfer.files?.[0];
+                        if (file) setEditItemFile(file);
+                      }}
+                      className={`block cursor-pointer rounded-xl border-2 border-dashed px-4 py-5 text-center text-sm transition-colors ${
+                        editItemDragging ? "border-primary bg-primary/5" : "border-border"
+                      }`}
+                    >
+                      {editItemFile ? `${editItemFile.name} selected` : "Drop replacement image here or click to upload"}
+                    </label>
+                    {editItemPreview && (
+                      <div className="rounded-xl overflow-hidden border border-border bg-muted/40 max-w-xs">
+                        <img src={editItemPreview} alt="Edit item preview" className="w-full aspect-[16/10] object-cover" />
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <button onClick={saveEditedItem} className="pill-btn mt-3" disabled={savingItem}>
                   {savingItem ? "Saving..." : "Save Changes"}
@@ -566,29 +656,29 @@ const AdminDashboard = () => {
               </div>
             )}
 
-            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {inventory.map((item, i) => (
                 <AnimateInView key={item.id} delay={i * 60}>
-                  <div className="brand-card p-0 overflow-hidden">
+                  <div className="rounded-[28px] border-2 border-[#c9c3b8] bg-[#d8d2c8] p-3 sm:p-4 overflow-hidden">
                     {item.image_url && (
-                      <div className="aspect-[16/10] bg-muted overflow-hidden">
+                      <div className="aspect-[16/10] bg-muted overflow-hidden rounded-[20px]">
                         <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
                       </div>
                     )}
-                    <div className="p-3">
-                      <div className="flex items-start justify-between mb-1.5 gap-2">
-                        <h3 className="font-serif text-sm leading-snug flex-1">{item.name}</h3>
-                        <button onClick={() => startEditItem(item)} className="pill-btn-outline px-2 py-1 text-[10px] gap-1">
+                    <div className="pt-3 px-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-serif text-[1.05rem] leading-snug flex-1 line-clamp-1 text-[#2f2a24]">{item.name}</h3>
+                        <button onClick={() => startEditItem(item)} className="pill-btn-outline px-2 py-1 text-[10px] gap-1 bg-white/70">
                           <Pencil className="h-3 w-3" /> Edit
                         </button>
                       </div>
-                      <div className="flex items-center justify-between text-[11px] mb-1.5">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground whitespace-nowrap">{item.category}</span>
-                        <span className={item.available_count > 0 ? "text-foreground font-medium" : "text-destructive font-medium"}>
-                          {item.available_count}/{item.total_count}
+                      <div className="mt-2 flex items-center justify-between text-[12px]">
+                        <span className="inline-flex rounded-full bg-white/70 px-2.5 py-1 text-[11px] text-[#44403c]">{item.category}</span>
+                        <span className={item.available_count > 0 ? "text-[#2f2a24] font-semibold" : "text-destructive font-semibold"}>
+                          {item.available_count} / {item.total_count}
                         </span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground">Available components</p>
+                      <p className="mt-1 text-[12px] text-[#5f5950]">Available components</p>
                     </div>
                   </div>
                 </AnimateInView>

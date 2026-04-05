@@ -656,23 +656,23 @@ const StudentDashboard = () => {
                 placeholder="Full delivery address" rows={2}
                 className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-none" />
             </div>
-            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {inventory.map((item, i) => (
                 <AnimateInView key={item.id} delay={i * 60}>
-                  <div className="project-card-surface p-0 overflow-hidden h-full flex flex-col">
+                  <div className="rounded-[28px] border-2 border-[#c9c3b8] bg-[#d8d2c8] p-3 sm:p-4 overflow-hidden h-full flex flex-col">
                     {item.image_url && (
-                      <div className="aspect-[16/10] bg-muted overflow-hidden">
+                      <div className="aspect-[16/10] bg-muted overflow-hidden rounded-[20px]">
                         <img src={item.image_url} alt={item.name} className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" />
                       </div>
                     )}
-                    <div className="p-3 sm:p-4 flex flex-col flex-1">
+                    <div className="pt-3 px-1 flex flex-col flex-1">
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <h3 className="font-serif text-sm leading-snug flex-1">{item.name}</h3>
-                        <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-secondary text-muted-foreground whitespace-nowrap">{item.category}</span>
+                        <h3 className="font-serif text-[1.05rem] leading-snug flex-1 line-clamp-1 text-[#2f2a24]">{item.name}</h3>
+                        <span className="inline-flex rounded-full bg-white/70 px-2.5 py-1 text-[11px] text-[#44403c] whitespace-nowrap">{item.category}</span>
                       </div>
-                      <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-3 mt-auto">
-                        <span>Total: {item.total_count}</span>
-                        <span className={item.available_count > 0 ? "text-foreground font-medium" : "text-destructive font-medium"}>
+                      <div className="flex items-center justify-between text-[12px] mb-3 mt-auto">
+                        <span className="text-[#5f5950]">Total: {item.total_count}</span>
+                        <span className={item.available_count > 0 ? "text-[#2f2a24] font-semibold" : "text-destructive font-semibold"}>
                           {getAvailableAfterCart(item) > 0 ? `${getAvailableAfterCart(item)} left` : "Booked out"}
                         </span>
                       </div>
