@@ -51,6 +51,8 @@ serve(async (req) => {
       customCheckoutEndpoint,
       `${dodoApiBaseUrl}/v1/checkouts`,
       `${dodoApiBaseUrl}/v1/checkout-sessions`,
+      `${dodoApiBaseUrl}/api/v1/checkouts`,
+      `${dodoApiBaseUrl}/api/v1/checkout-sessions`,
     ].filter((v): v is string => typeof v === "string" && v.length > 0);
 
     const payload = {
@@ -89,6 +91,7 @@ serve(async (req) => {
         method: "POST",
         headers: {
           Authorization: `Bearer ${dodoApiKey}`,
+          "x-api-key": dodoApiKey,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),

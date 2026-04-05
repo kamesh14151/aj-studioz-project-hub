@@ -129,7 +129,15 @@ const StudentDashboard = () => {
         },
       });
 
-      if (fnError) throw new Error(fnError.message || "Unable to start checkout session");
+      if (fnError) {
+        let detailedMessage = fnError.message || "Unable to start checkout session";
+        const context = (fnError as any)?.context;
+        if (context && typeof context.json === "function") {
+          const payload = await context.json().catch(() => null);
+          detailedMessage = payload?.error || payload?.message || detailedMessage;
+        }
+        throw new Error(detailedMessage);
+      }
       if (!data?.url) throw new Error("Checkout URL was not returned by the server");
 
       // Use same-tab redirect to avoid popup blocking issues.
