@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import AnimateInView from "@/components/AnimateInView";
-import { ClipboardCheck, TrendingUp, ChevronDown, Plus, X, Truck } from "lucide-react";
+import { ClipboardCheck, TrendingUp, ChevronDown, Plus, X, Truck, Pencil } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
@@ -55,6 +55,16 @@ const AdminDashboard = () => {
   const [newItemCategory, setNewItemCategory] = useState("");
   const [newItemTotal, setNewItemTotal] = useState("");
   const [newItemImage, setNewItemImage] = useState("");
+  const [newItemFile, setNewItemFile] = useState<File | null>(null);
+  const [savingItem, setSavingItem] = useState(false);
+
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editItemName, setEditItemName] = useState("");
+  const [editItemCategory, setEditItemCategory] = useState("");
+  const [editItemTotal, setEditItemTotal] = useState("");
+  const [editItemAvailable, setEditItemAvailable] = useState("");
+  const [editItemImage, setEditItemImage] = useState("");
+  const [editItemFile, setEditItemFile] = useState<File | null>(null);
 
   const fetchIdeas = async () => {
     const { data: ideasData, error: ideasError } = await supabase
@@ -193,21 +203,95 @@ const AdminDashboard = () => {
     else setOpenDropdown(null);
   };
 
+  const uploadInventoryImage = async (file: File) => {
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `inventory/${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await supabase.storage.from("inventory-images").upload(path, file, {
+      cacheControl: "3600",
+      upsert: true,
+    });
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from("inventory-images").getPublicUrl(path);
+    return data.publicUrl;
+  };
+
   const addInventoryItem = async () => {
     if (!newItemName.trim() || !newItemCategory.trim() || !newItemTotal) return;
-    const total = parseInt(newItemTotal);
-    const { error } = await supabase.from("inventory").insert({
-      name: newItemName.trim(),
-      category: newItemCategory.trim(),
-      total_count: total,
-      available_count: total,
-      image_url: newItemImage.trim() || null,
-    });
-    if (error) toast.error(error.message);
-    else {
+    setSavingItem(true);
+    try {
+      const total = parseInt(newItemTotal, 10);
+      if (Number.isNaN(total) || total < 0) throw new Error("Quantity must be a valid positive number");
+
+      const uploadedImageUrl = newItemFile ? await uploadInventoryImage(newItemFile) : null;
+      const imageUrl = uploadedImageUrl || newItemImage.trim() || null;
+
+      const { error } = await supabase.from("inventory").insert({
+        name: newItemName.trim(),
+        category: newItemCategory.trim(),
+        total_count: total,
+        available_count: total,
+        image_url: imageUrl,
+      });
+
+      if (error) throw error;
+
       toast.success("Item added!");
-      setNewItemName(""); setNewItemCategory(""); setNewItemTotal(""); setNewItemImage("");
+      setNewItemName("");
+      setNewItemCategory("");
+      setNewItemTotal("");
+      setNewItemImage("");
+      setNewItemFile(null);
       setShowAddItem(false);
+      fetchInventory();
+    } catch (err: any) {
+      toast.error(err?.message || "Unable to add item. Ensure storage bucket policies are configured.");
+    } finally {
+      setSavingItem(false);
+    }
+  };
+
+  const startEditItem = (item: InventoryItem) => {
+    setEditingItemId(item.id);
+    setEditItemName(item.name);
+    setEditItemCategory(item.category);
+    setEditItemTotal(String(item.total_count));
+    setEditItemAvailable(String(item.available_count));
+    setEditItemImage(item.image_url || "");
+    setEditItemFile(null);
+  };
+
+  const saveEditedItem = async () => {
+    if (!editingItemId || !editItemName.trim() || !editItemCategory.trim()) return;
+    setSavingItem(true);
+    try {
+      const total = parseInt(editItemTotal, 10);
+      const available = parseInt(editItemAvailable, 10);
+      if (Number.isNaN(total) || total < 0) throw new Error("Total quantity must be valid");
+      if (Number.isNaN(available) || available < 0) throw new Error("Available quantity must be valid");
+
+      const uploadedImageUrl = editItemFile ? await uploadInventoryImage(editItemFile) : null;
+      const imageUrl = uploadedImageUrl || editItemImage.trim() || null;
+
+      const { error } = await supabase
+        .from("inventory")
+        .update({
+          name: editItemName.trim(),
+          category: editItemCategory.trim(),
+          total_count: total,
+          available_count: Math.min(available, total),
+          image_url: imageUrl,
+        })
+        .eq("id", editingItemId);
+      if (error) throw error;
+
+      toast.success("Item updated");
+      setEditingItemId(null);
+      fetchInventory();
+    } catch (err: any) {
+      toast.error(err?.message || "Unable to update item");
+    } finally {
+      setSavingItem(false);
     }
   };
 
@@ -446,33 +530,65 @@ const AdminDashboard = () => {
                     className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
                   <input type="url" value={newItemImage} onChange={(e) => setNewItemImage(e.target.value)} placeholder="Image URL (optional)"
                     className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  <input type="file" accept="image/*" onChange={(e) => setNewItemFile(e.target.files?.[0] ?? null)}
+                    className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
                 </div>
                 <button onClick={addInventoryItem} className="pill-btn mt-3"
-                  disabled={!newItemName.trim() || !newItemCategory.trim() || !newItemTotal}>
-                  Add Item
+                  disabled={savingItem || !newItemName.trim() || !newItemCategory.trim() || !newItemTotal}>
+                  {savingItem ? "Saving..." : "Add Item"}
                 </button>
               </div>
             )}
 
-            <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            {editingItemId && (
+              <div className="brand-card mb-6 relative">
+                <button onClick={() => setEditingItemId(null)} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+                <h3 className="font-serif text-lg mb-4">Edit Inventory Item</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input type="text" value={editItemName} onChange={(e) => setEditItemName(e.target.value)} placeholder="Item name"
+                    className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  <input type="text" value={editItemCategory} onChange={(e) => setEditItemCategory(e.target.value)} placeholder="Category"
+                    className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  <input type="number" value={editItemTotal} onChange={(e) => setEditItemTotal(e.target.value)} placeholder="Total quantity"
+                    className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  <input type="number" value={editItemAvailable} onChange={(e) => setEditItemAvailable(e.target.value)} placeholder="Available quantity"
+                    className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  <input type="url" value={editItemImage} onChange={(e) => setEditItemImage(e.target.value)} placeholder="Image URL (optional)"
+                    className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  <input type="file" accept="image/*" onChange={(e) => setEditItemFile(e.target.files?.[0] ?? null)}
+                    className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <button onClick={saveEditedItem} className="pill-btn mt-3" disabled={savingItem}>
+                  {savingItem ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            )}
+
+            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {inventory.map((item, i) => (
                 <AnimateInView key={item.id} delay={i * 60}>
                   <div className="brand-card p-0 overflow-hidden">
                     {item.image_url && (
-                      <div className="aspect-[4/3] bg-muted overflow-hidden">
+                      <div className="aspect-[16/10] bg-muted overflow-hidden">
                         <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
                       </div>
                     )}
-                    <div className="p-4 sm:p-5">
-                      <div className="flex items-start justify-between mb-2 gap-2">
-                        <h3 className="font-serif text-sm sm:text-base flex-1">{item.name}</h3>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground whitespace-nowrap">{item.category}</span>
+                    <div className="p-3">
+                      <div className="flex items-start justify-between mb-1.5 gap-2">
+                        <h3 className="font-serif text-sm leading-snug flex-1">{item.name}</h3>
+                        <button onClick={() => startEditItem(item)} className="pill-btn-outline px-2 py-1 text-[10px] gap-1">
+                          <Pencil className="h-3 w-3" /> Edit
+                        </button>
                       </div>
-                      <div className="text-xs sm:text-sm mt-2">
+                      <div className="flex items-center justify-between text-[11px] mb-1.5">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground whitespace-nowrap">{item.category}</span>
                         <span className={item.available_count > 0 ? "text-foreground font-medium" : "text-destructive font-medium"}>
-                          {item.available_count} / {item.total_count} Available
+                          {item.available_count}/{item.total_count}
                         </span>
                       </div>
+                      <p className="text-[11px] text-muted-foreground">Available components</p>
                     </div>
                   </div>
                 </AnimateInView>
