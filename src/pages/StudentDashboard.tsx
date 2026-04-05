@@ -47,11 +47,38 @@ const StudentDashboard = () => {
   const [bookingId, setBookingId] = useState<string | null>(null);
 
   const fetchIdeas = async () => {
-    const { data } = await supabase
+    const { data: ideasData, error: ideasError } = await supabase
       .from("ideas")
-      .select("*, profiles!ideas_author_id_fkey(display_name)")
+      .select("*")
       .order("created_at", { ascending: false });
-    if (data) setIdeas(data as unknown as Idea[]);
+    if (ideasError) {
+      toast.error(ideasError.message);
+      return;
+    }
+    if (!ideasData) {
+      setIdeas([]);
+      return;
+    }
+
+    const authorIds = [...new Set(ideasData.map((idea) => idea.author_id))];
+    if (authorIds.length === 0) {
+      setIdeas(ideasData as Idea[]);
+      return;
+    }
+
+    const { data: profilesData } = await supabase
+      .from("profiles")
+      .select("user_id, display_name")
+      .in("user_id", authorIds);
+
+    const profileMap = new Map((profilesData ?? []).map((profile) => [profile.user_id, profile.display_name]));
+
+    setIdeas(
+      ideasData.map((idea) => ({
+        ...idea,
+        profiles: { display_name: profileMap.get(idea.author_id) ?? null },
+      })) as Idea[]
+    );
   };
 
   const fetchInventory = async () => {
@@ -102,6 +129,13 @@ const StudentDashboard = () => {
     if (!user || item.available_count <= 0) return;
     setBookingId(item.id);
 
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      toast.error("Session expired. Please sign in again.");
+      setBookingId(null);
+      return;
+    }
+
     // Create booking first
     const { data: booking, error } = await supabase
       .from("bookings")
@@ -121,6 +155,9 @@ const StudentDashboard = () => {
     // Then redirect to Dodo Payments checkout
     try {
       const { data, error: fnError } = await supabase.functions.invoke("create-checkout", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: {
           itemName: item.name,
           quantity: 1,
