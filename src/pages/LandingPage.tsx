@@ -55,12 +55,12 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <nav className="border-b border-border bg-card/80 backdrop-blur-md">
+      <nav className="border-b border-primary/30 bg-primary text-primary-foreground shadow-lg">
         <div className="container mx-auto flex h-14 sm:h-16 items-center px-4 sm:px-6 gap-3">
           <img src="https://www.sonatech.ac.in/images/logo.png" alt="Sona College" className="h-9 w-9 sm:h-10 sm:w-10 object-contain" />
           <div className="flex flex-col">
             <span className="font-serif text-sm sm:text-base font-bold leading-tight">Sona College of Technology</span>
-            <span className="text-[10px] sm:text-xs text-muted-foreground leading-tight">An Autonomous Institution</span>
+            <span className="text-[10px] sm:text-xs text-primary-foreground/80 leading-tight">An Autonomous Institution</span>
           </div>
         </div>
       </nav>

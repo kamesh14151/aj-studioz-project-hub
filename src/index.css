@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Open+Sans:wght@400;500;600;700&family=Dosis:wght@500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,46 +6,46 @@
 
 @layer base {
   :root {
-    --background: 0 0% 97%;
-    --foreground: 40 10% 18%;
+    --background: 210 25% 98%;
+    --foreground: 211 100% 14%;
     --card: 0 0% 100%;
-    --card-foreground: 40 10% 18%;
+    --card-foreground: 211 100% 14%;
     --popover: 0 0% 100%;
-    --popover-foreground: 40 10% 18%;
-    --primary: 40 10% 18%;
-    --primary-foreground: 0 0% 97%;
-    --secondary: 0 0% 95%;
-    --secondary-foreground: 40 10% 18%;
-    --muted: 40 2% 85%;
-    --muted-foreground: 40 4% 45%;
-    --accent: 40 3% 97%;
-    --accent-foreground: 40 10% 18%;
+    --popover-foreground: 211 100% 14%;
+    --primary: 211 100% 14%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 46 98% 50%;
+    --secondary-foreground: 211 100% 14%;
+    --muted: 214 25% 92%;
+    --muted-foreground: 214 20% 38%;
+    --accent: 215 49% 41%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 40 3% 91%;
-    --input: 40 3% 91%;
-    --ring: 40 10% 18%;
+    --border: 214 24% 84%;
+    --input: 214 24% 84%;
+    --ring: 211 100% 14%;
     --radius: 0.5rem;
 
-    --chip: 0 0% 95%;
+    --chip: 214 25% 92%;
     --project-card-top: 0 0% 100%;
-    --project-card-bottom: 40 3% 97%;
+    --project-card-bottom: 214 35% 97%;
 
-    --footer-bg: 40 10% 12%;
-    --footer-foreground: 40 6% 80%;
+    --footer-bg: 211 100% 14%;
+    --footer-foreground: 0 0% 94%;
 
     --status-review: 45 90% 50%;
     --status-approved: 145 60% 40%;
     --status-invested: 220 70% 50%;
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 40 10% 18%;
-    --sidebar-primary: 40 10% 18%;
-    --sidebar-primary-foreground: 0 0% 97%;
-    --sidebar-accent: 40 6% 93%;
-    --sidebar-accent-foreground: 40 10% 18%;
-    --sidebar-border: 40 6% 85%;
-    --sidebar-ring: 40 10% 18%;
+    --sidebar-background: 210 25% 98%;
+    --sidebar-foreground: 211 100% 14%;
+    --sidebar-primary: 211 100% 14%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 214 25% 92%;
+    --sidebar-accent-foreground: 211 100% 14%;
+    --sidebar-border: 214 24% 84%;
+    --sidebar-ring: 211 100% 14%;
   }
 
   .dark {
@@ -57,11 +57,11 @@
     --popover-foreground: 0 0% 100%;
     --primary: 0 0% 100%;
     --primary-foreground: 0 0% 6%;
-    --secondary: 0 0% 9%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 0 0% 16%;
-    --muted-foreground: 0 0% 81%;
-    --accent: 0 0% 18%;
+    --secondary: 46 98% 50%;
+    --secondary-foreground: 211 100% 14%;
+    --muted: 215 35% 18%;
+    --muted-foreground: 214 30% 80%;
+    --accent: 215 49% 41%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 100%;
@@ -69,20 +69,20 @@
     --input: 0 0% 16%;
     --ring: 0 0% 100%;
 
-    --chip: 0 0% 16%;
-    --project-card-top: 0 0% 10%;
-    --project-card-bottom: 0 0% 8%;
+    --chip: 215 35% 18%;
+    --project-card-top: 214 35% 16%;
+    --project-card-bottom: 214 40% 12%;
 
-    --footer-bg: 0 0% 4%;
-    --footer-foreground: 0 0% 70%;
+    --footer-bg: 214 40% 10%;
+    --footer-foreground: 0 0% 92%;
 
-    --sidebar-background: 0 0% 8%;
+    --sidebar-background: 214 40% 10%;
     --sidebar-foreground: 0 0% 100%;
     --sidebar-primary: 0 0% 100%;
-    --sidebar-primary-foreground: 0 0% 6%;
-    --sidebar-accent: 0 0% 16%;
+    --sidebar-primary-foreground: 214 40% 10%;
+    --sidebar-accent: 215 35% 18%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 0 0% 16%;
+    --sidebar-border: 215 35% 20%;
     --sidebar-ring: 0 0% 100%;
   }
 }
@@ -93,30 +93,31 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Open Sans', sans-serif;
     line-height: 1.7;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply font-serif;
+    font-family: 'Merriweather', serif;
   }
 }
 
 @layer components {
   .display-xl {
-    font-family: 'Libre Baskerville', serif;
+    font-family: 'Merriweather', serif;
     font-size: 3.75rem;
     line-height: 1.08;
     letter-spacing: -0.025em;
   }
 
   .display-lg {
-    font-family: 'Libre Baskerville', serif;
+    font-family: 'Merriweather', serif;
     font-size: 3rem;
     line-height: 1.1;
     letter-spacing: -0.02em;
   }
 
   .display-md {
-    font-family: 'Libre Baskerville', serif;
+    font-family: 'Merriweather', serif;
     font-size: 2.25rem;
     line-height: 1.15;
     letter-spacing: -0.015em;
@@ -133,40 +134,40 @@
   }
 
   .brand-wordmark {
-    font-family: 'Libre Baskerville', serif;
-    font-style: italic;
-    text-transform: lowercase;
-    letter-spacing: -0.01em;
+    font-family: 'Dosis', sans-serif;
+    font-style: normal;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
 
   .brand-card {
     border-radius: 0.75rem;
     border: 1px solid hsl(var(--border));
     background: hsl(var(--card));
-    box-shadow: 0 1px 0 hsl(var(--foreground) / 0.04), 0 12px 28px hsl(var(--foreground) / 0.08);
+    box-shadow: 0 2px 0 hsl(var(--foreground) / 0.06), 0 10px 24px hsl(var(--foreground) / 0.1);
     @apply p-6 transition-all duration-300 ease-out;
   }
   .brand-card:hover {
     transform: translateY(-0.25rem);
-    border-color: hsl(var(--foreground) / 0.2);
-    box-shadow: 0 1px 0 hsl(var(--foreground) / 0.06), 0 18px 40px hsl(var(--foreground) / 0.14);
+    border-color: hsl(var(--accent) / 0.45);
+    box-shadow: 0 2px 0 hsl(var(--foreground) / 0.08), 0 14px 30px hsl(var(--foreground) / 0.14);
   }
 
   .project-card-surface {
     background: linear-gradient(180deg, hsl(var(--project-card-top)) 0%, hsl(var(--project-card-bottom)) 100%);
-    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.65), 0 12px 36px hsl(var(--foreground) / 0.08);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.65), 0 10px 28px hsl(var(--foreground) / 0.1);
     @apply border border-border rounded-lg overflow-hidden transition-all duration-200;
   }
 
   .pill-btn {
-    @apply inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-medium transition-all duration-200;
-    background: hsl(var(--foreground));
-    color: hsl(var(--background));
+    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold transition-all duration-200;
+    background: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
     @apply hover:opacity-90 active:scale-[0.98];
   }
 
   .pill-btn-outline {
-    @apply inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-medium transition-all duration-200;
+    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold transition-all duration-200;
     @apply border border-primary text-primary hover:bg-primary hover:text-primary-foreground;
   }
 
@@ -192,7 +193,7 @@
   }
 
   .footer-surface {
-    background: hsl(var(--footer-bg));
+    background: linear-gradient(180deg, hsl(215 49% 41%) 0%, hsl(var(--footer-bg)) 100%);
     color: hsl(var(--footer-foreground));
   }
 }

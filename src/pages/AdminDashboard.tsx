@@ -125,7 +125,7 @@ const AdminDashboard = () => {
               key={t.key}
               onClick={() => setTab(t.key)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm transition-all ${
-                tab === t.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                tab === t.key ? "bg-secondary text-secondary-foreground" : "text-primary-foreground/80 hover:text-primary-foreground"
               }`}
             >
               {t.icon}
