@@ -52,9 +52,14 @@ serve(async (req) => {
         : "https://www.sonatech.ac.in";
 
     const configuredBase = dodoApiBaseUrl.replace(/\/$/, "");
+    const configuredPaymentsEndpoint = configuredBase
+      ? (configuredBase.endsWith("/payments") ? configuredBase : `${configuredBase}/payments`)
+      : "";
+    const customEndpoint = (customCheckoutEndpoint || "").replace(/\/$/, "");
+
     const endpointCandidates = [
-      customCheckoutEndpoint,
-      configuredBase ? `${configuredBase}/payments` : "",
+      customEndpoint,
+      configuredPaymentsEndpoint,
       `${defaultBaseUrl}/payments`,
       "https://api.dodopayments.com/payments",
       configuredBase ? `${configuredBase}/v1/checkouts` : "",
@@ -62,6 +67,8 @@ serve(async (req) => {
       configuredBase ? `${configuredBase}/api/v1/checkouts` : "",
       configuredBase ? `${configuredBase}/api/v1/checkout-sessions` : "",
     ].filter((v): v is string => typeof v === "string" && v.length > 0);
+
+    const uniqueEndpointCandidates = [...new Set(endpointCandidates)];
 
     const payload = {
       billing: {
@@ -109,52 +116,58 @@ serve(async (req) => {
     let lastError = "Unable to create Dodo checkout session";
     let checkoutUrl: string | undefined;
 
-    for (const endpoint of endpointCandidates) {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${dodoApiKey}`,
-          "x-api-key": dodoApiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const text = await response.text();
-      let parsed: any = null;
+    for (const endpoint of uniqueEndpointCandidates) {
       try {
-        parsed = text ? JSON.parse(text) : null;
-      } catch {
-        parsed = null;
-      }
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${dodoApiKey}`,
+            "x-api-key": dodoApiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
 
-      if (response.ok) {
-        checkoutUrl =
-          parsed?.url ||
-          parsed?.checkout_url ||
-          parsed?.payment_url ||
-          parsed?.payment_link ||
-          parsed?.payment_link?.payment_link ||
-          parsed?.payment_link?.url ||
-          parsed?.payment_link?.checkout_url ||
-          parsed?.hosted_url ||
-          parsed?.data?.url ||
-          parsed?.data?.checkout_url ||
-          parsed?.data?.payment_link ||
-          parsed?.data?.payment_link?.payment_link ||
-          parsed?.data?.payment_link?.url ||
-          parsed?.data?.payment_link?.checkout_url ||
-          parsed?.data?.payment_url ||
-          parsed?.data?.hosted_url ||
-          parsed?.session?.url;
-        if (checkoutUrl) break;
-        lastError = `Dodo checkout endpoint ${endpoint} did not return a checkout URL`;
+        const text = await response.text();
+        let parsed: any = null;
+        try {
+          parsed = text ? JSON.parse(text) : null;
+        } catch {
+          parsed = null;
+        }
+
+        if (response.ok) {
+          checkoutUrl =
+            parsed?.url ||
+            parsed?.checkout_url ||
+            parsed?.payment_url ||
+            parsed?.payment_link ||
+            parsed?.payment_link?.payment_link ||
+            parsed?.payment_link?.url ||
+            parsed?.payment_link?.checkout_url ||
+            parsed?.hosted_url ||
+            parsed?.data?.url ||
+            parsed?.data?.checkout_url ||
+            parsed?.data?.payment_link ||
+            parsed?.data?.payment_link?.payment_link ||
+            parsed?.data?.payment_link?.url ||
+            parsed?.data?.payment_link?.checkout_url ||
+            parsed?.data?.payment_url ||
+            parsed?.data?.hosted_url ||
+            parsed?.session?.url;
+          if (checkoutUrl) break;
+          lastError = `Dodo checkout endpoint ${endpoint} did not return a checkout URL`;
+          continue;
+        }
+
+        lastError = `Dodo checkout error (${response.status}) on ${endpoint}: ${text || response.statusText}`;
+        if (response.status !== 404) {
+          break;
+        }
+      } catch (requestError) {
+        const reason = requestError instanceof Error ? requestError.message : String(requestError);
+        lastError = `Dodo checkout request failed on ${endpoint}: ${reason}`;
         continue;
-      }
-
-      lastError = `Dodo checkout error (${response.status}) on ${endpoint}: ${text || response.statusText}`;
-      if (response.status !== 404) {
-        break;
       }
     }
 
