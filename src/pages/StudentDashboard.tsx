@@ -136,22 +136,6 @@ const StudentDashboard = () => {
       return;
     }
 
-    // Create booking first
-    const { data: booking, error } = await supabase
-      .from("bookings")
-      .insert({
-        item_id: item.id,
-        user_id: user.id,
-      })
-      .select("id")
-      .single();
-
-    if (error) {
-      toast.error(error.message);
-      setBookingId(null);
-      return;
-    }
-
     // Then redirect to Dodo Payments checkout
     try {
       const body = {
@@ -190,17 +174,27 @@ const StudentDashboard = () => {
       }
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Invalid JWT from Edge Function. In Supabase > Edge Functions > create-checkout > Settings, disable 'Verify JWT with legacy secret' and retry.");
+        }
         throw new Error(payload?.error || payload?.message || `Checkout failed with status ${response.status}`);
       }
 
       if (!payload?.url) throw new Error("Checkout URL was not returned by the server");
 
+      // Create booking only after checkout URL is successfully created.
+      const { error: bookingError } = await supabase.from("bookings").insert({
+        item_id: item.id,
+        user_id: user.id,
+      });
+
+      if (bookingError) {
+        throw new Error(bookingError.message || "Unable to create booking record");
+      }
+
       // Use same-tab redirect to avoid popup blocking issues.
       window.location.assign(payload.url);
     } catch (err: any) {
-      if (booking?.id) {
-        await supabase.from("bookings").delete().eq("id", booking.id);
-      }
       toast.error(err?.message || `Unable to open payment checkout for ${item.name}.`);
     }
 
