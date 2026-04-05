@@ -28,13 +28,17 @@ serve(async (req) => {
 
     const { itemName, quantity, successUrl, cancelUrl } = await req.json();
 
-    const dodoApiKey = Deno.env.get("DODO_API_KEY");
+    const dodoApiKey = Deno.env.get("DODO_API_KEY") || Deno.env.get("DODO_PAYMENTS_API_KEY");
     if (!dodoApiKey) throw new Error("Missing DODO_API_KEY");
 
-    const dodoProductId = Deno.env.get("DODO_PRODUCT_ID");
+    const dodoProductId = Deno.env.get("DODO_PRODUCT_ID") || Deno.env.get("DODO_PRODUCT_ID_BASIC");
     if (!dodoProductId) throw new Error("Missing DODO_PRODUCT_ID");
 
-    const dodoApiBaseUrl = Deno.env.get("DODO_API_BASE_URL") || "https://api.dodopayments.com";
+    const dodoApiBaseUrl = Deno.env.get("DODO_API_BASE_URL") || Deno.env.get("DODO_PAYMENTS_BASE_URL") || "";
+    const envMode = String(Deno.env.get("DODO_PAYMENTS_ENVIRONMENT") || "test_mode").trim();
+    const defaultBaseUrl = envMode === "live_mode"
+      ? "https://live.dodopayments.com"
+      : "https://test.dodopayments.com";
     const customCheckoutEndpoint = Deno.env.get("DODO_CHECKOUT_ENDPOINT");
 
     const resolvedSuccessUrl =
@@ -47,21 +51,39 @@ serve(async (req) => {
         ? cancelUrl
         : "https://www.sonatech.ac.in";
 
+    const configuredBase = dodoApiBaseUrl.replace(/\/$/, "");
     const endpointCandidates = [
       customCheckoutEndpoint,
-      `${dodoApiBaseUrl}/v1/checkouts`,
-      `${dodoApiBaseUrl}/v1/checkout-sessions`,
-      `${dodoApiBaseUrl}/api/v1/checkouts`,
-      `${dodoApiBaseUrl}/api/v1/checkout-sessions`,
+      configuredBase ? `${configuredBase}/payments` : "",
+      `${defaultBaseUrl}/payments`,
+      "https://api.dodopayments.com/payments",
+      configuredBase ? `${configuredBase}/v1/checkouts` : "",
+      configuredBase ? `${configuredBase}/v1/checkout-sessions` : "",
+      configuredBase ? `${configuredBase}/api/v1/checkouts` : "",
+      configuredBase ? `${configuredBase}/api/v1/checkout-sessions` : "",
     ].filter((v): v is string => typeof v === "string" && v.length > 0);
 
     const payload = {
+      billing: {
+        city: "Salem",
+        country: "IN",
+        state: "Tamil Nadu",
+        street: "Sona College of Technology",
+        zipcode: 636005,
+      },
+      payment_link: true,
       customer: {
         email: user.email,
       },
       customer_email: user.email,
       product_id: dodoProductId,
       quantity: Number(quantity) || 1,
+      product_cart: [
+        {
+          product_id: dodoProductId,
+          quantity: Number(quantity) || 1,
+        },
+      ],
       items: [
         {
           product_id: dodoProductId,
@@ -77,6 +99,7 @@ serve(async (req) => {
       ],
       success_url: resolvedSuccessUrl,
       cancel_url: resolvedCancelUrl,
+      return_url: resolvedSuccessUrl,
       metadata: {
         item_name: itemName || "Hardware Component",
         user_id: user.id,
@@ -110,8 +133,19 @@ serve(async (req) => {
           parsed?.url ||
           parsed?.checkout_url ||
           parsed?.payment_url ||
+          parsed?.payment_link ||
+          parsed?.payment_link?.payment_link ||
+          parsed?.payment_link?.url ||
+          parsed?.payment_link?.checkout_url ||
+          parsed?.hosted_url ||
           parsed?.data?.url ||
           parsed?.data?.checkout_url ||
+          parsed?.data?.payment_link ||
+          parsed?.data?.payment_link?.payment_link ||
+          parsed?.data?.payment_link?.url ||
+          parsed?.data?.payment_link?.checkout_url ||
+          parsed?.data?.payment_url ||
+          parsed?.data?.hosted_url ||
           parsed?.session?.url;
         if (checkoutUrl) break;
         lastError = `Dodo checkout endpoint ${endpoint} did not return a checkout URL`;
