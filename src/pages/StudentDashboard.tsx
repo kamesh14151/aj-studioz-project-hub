@@ -118,7 +118,7 @@ const StudentDashboard = () => {
       return;
     }
 
-    // Then redirect to Stripe checkout
+    // Then redirect to Dodo Payments checkout
     try {
       const { data, error: fnError } = await supabase.functions.invoke("create-checkout", {
         body: {

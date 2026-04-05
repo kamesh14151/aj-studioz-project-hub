@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
@@ -29,10 +28,14 @@ serve(async (req) => {
 
     const { itemName, quantity, successUrl, cancelUrl } = await req.json();
 
-    const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeSecretKey) throw new Error("Missing STRIPE_SECRET_KEY");
+    const dodoApiKey = Deno.env.get("DODO_API_KEY");
+    if (!dodoApiKey) throw new Error("Missing DODO_API_KEY");
 
-    const stripePriceId = Deno.env.get("STRIPE_PRICE_ID") || "price_1TIgCHRHzpC6PF1T0Bu55iTz";
+    const dodoProductId = Deno.env.get("DODO_PRODUCT_ID");
+    if (!dodoProductId) throw new Error("Missing DODO_PRODUCT_ID");
+
+    const dodoApiBaseUrl = Deno.env.get("DODO_API_BASE_URL") || "https://api.dodopayments.com";
+    const customCheckoutEndpoint = Deno.env.get("DODO_CHECKOUT_ENDPOINT");
 
     const resolvedSuccessUrl =
       typeof successUrl === "string" && successUrl.startsWith("http")
@@ -44,35 +47,85 @@ serve(async (req) => {
         ? cancelUrl
         : "https://www.sonatech.ac.in";
 
-    const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: "2024-06-20",
-    });
+    const endpointCandidates = [
+      customCheckoutEndpoint,
+      `${dodoApiBaseUrl}/v1/checkouts`,
+      `${dodoApiBaseUrl}/v1/checkout-sessions`,
+    ].filter((v): v is string => typeof v === "string" && v.length > 0);
 
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-    let customerId;
-    if (customers.data.length > 0) {
-      customerId = customers.data[0].id;
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      customer_email: customerId ? undefined : user.email,
-      line_items: [
+    const payload = {
+      customer: {
+        email: user.email,
+      },
+      customer_email: user.email,
+      product_id: dodoProductId,
+      quantity: Number(quantity) || 1,
+      items: [
         {
-          price: stripePriceId,
-          quantity: quantity || 1,
+          product_id: dodoProductId,
+          quantity: Number(quantity) || 1,
+          name: itemName || "Hardware Component",
         },
       ],
-      mode: "payment",
+      line_items: [
+        {
+          product_id: dodoProductId,
+          quantity: Number(quantity) || 1,
+        },
+      ],
       success_url: resolvedSuccessUrl,
       cancel_url: resolvedCancelUrl,
       metadata: {
         item_name: itemName || "Hardware Component",
         user_id: user.id,
       },
-    });
+    };
 
-    return new Response(JSON.stringify({ url: session.url }), {
+    let lastError = "Unable to create Dodo checkout session";
+    let checkoutUrl: string | undefined;
+
+    for (const endpoint of endpointCandidates) {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${dodoApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await response.text();
+      let parsed: any = null;
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch {
+        parsed = null;
+      }
+
+      if (response.ok) {
+        checkoutUrl =
+          parsed?.url ||
+          parsed?.checkout_url ||
+          parsed?.payment_url ||
+          parsed?.data?.url ||
+          parsed?.data?.checkout_url ||
+          parsed?.session?.url;
+        if (checkoutUrl) break;
+        lastError = `Dodo checkout endpoint ${endpoint} did not return a checkout URL`;
+        continue;
+      }
+
+      lastError = `Dodo checkout error (${response.status}) on ${endpoint}: ${text || response.statusText}`;
+      if (response.status !== 404) {
+        break;
+      }
+    }
+
+    if (!checkoutUrl) {
+      throw new Error(lastError);
+    }
+
+    return new Response(JSON.stringify({ url: checkoutUrl }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
