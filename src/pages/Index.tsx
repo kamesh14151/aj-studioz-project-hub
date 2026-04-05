@@ -10,7 +10,7 @@ const Index = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
-          <img src="/AJ.svg" alt="AJ Studioz" className="h-12 w-12 mx-auto mb-4 animate-pulse" />
+          <img src="https://www.sonatech.ac.in/images/logo.png" alt="Sona College" className="h-14 w-14 mx-auto mb-4 animate-pulse object-contain" />
           <p className="text-muted-foreground text-sm">Loading...</p>
         </div>
       </div>
