@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import AnimateInView from "@/components/AnimateInView";
-import { Lightbulb, Package, FileText, Plus, X, ShoppingCart, CreditCard, Loader2, Minus, History, Trash2 } from "lucide-react";
+import { Lightbulb, Package, FileText, Plus, X, ShoppingCart, CreditCard, Loader2, Minus, History, Trash2, MessageCircle, Send } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
@@ -75,13 +75,34 @@ interface OrderGroup {
   address: string;
 }
 
-const problemStatements = [
+interface ProblemStatement {
+  id: number;
+  title: string;
+  dept: string;
+  ministry: string;
+  description: string;
+  videoKey: string;
+  videoEmbedUrl: string;
+}
+
+interface VideoComment {
+  id: string;
+  video_key: string;
+  user_id: string;
+  comment_text: string;
+  created_at: string;
+  profiles?: { display_name: string | null } | null;
+}
+
+const problemStatements: ProblemStatement[] = [
   {
     id: 1,
     title: "Waste Segregation Automation",
     dept: "ECE",
     ministry: "Ministry of Housing and Urban Affairs",
     description: "Design a sensor-based system for automated waste classification in campus bins.",
+    videoKey: "waste-segregation-automation",
+    videoEmbedUrl: "https://www.youtube.com/embed/8hQG7QlcLBk",
   },
   {
     id: 2,
@@ -89,6 +110,8 @@ const problemStatements = [
     dept: "EEE",
     ministry: "Ministry of Jal Shakti",
     description: "Develop a moisture-sensing automated irrigation system for the botanical garden.",
+    videoKey: "smart-irrigation-campus-garden",
+    videoEmbedUrl: "https://www.youtube.com/embed/mzJj5-lubeM",
   },
   {
     id: 3,
@@ -96,6 +119,8 @@ const problemStatements = [
     dept: "CSE",
     ministry: "Ministry of Education",
     description: "Build an IoT system to display real-time seating availability in the library.",
+    videoKey: "library-seat-availability-tracker",
+    videoEmbedUrl: "https://www.youtube.com/embed/9No-FiEInLA",
   },
   {
     id: 4,
@@ -103,6 +128,8 @@ const problemStatements = [
     dept: "ECE",
     ministry: "Ministry of Home Affairs",
     description: "Create a wearable panic button that alerts campus security with GPS coordinates.",
+    videoKey: "emergency-sos-beacon",
+    videoEmbedUrl: "https://www.youtube.com/embed/v6I5Bq8Y0K8",
   },
 ];
 
@@ -124,6 +151,9 @@ const StudentDashboard = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartProcessing, setCartProcessing] = useState(false);
   const [orderHistory, setOrderHistory] = useState<BookingHistoryItem[]>([]);
+  const [videoComments, setVideoComments] = useState<Record<string, VideoComment[]>>({});
+  const [videoCommentDrafts, setVideoCommentDrafts] = useState<Record<string, string>>({});
+  const [postingVideoKey, setPostingVideoKey] = useState<string | null>(null);
   const [checkoutDetails, setCheckoutDetails] = useState({
     contactName: "",
     contactEmail: "",
@@ -212,6 +242,42 @@ const StudentDashboard = () => {
     );
   };
 
+  const fetchVideoComments = async () => {
+    const { data: commentsData, error: commentsError } = await supabase
+      .from("video_comments" as any)
+      .select("id, video_key, user_id, comment_text, created_at")
+      .order("created_at", { ascending: true });
+
+    if (commentsError) {
+      toast.error(commentsError.message);
+      return;
+    }
+
+    const comments = (commentsData ?? []) as VideoComment[];
+    const userIds = [...new Set(comments.map((comment) => comment.user_id))];
+
+    let profileMap = new Map<string, string | null>();
+    if (userIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("user_id, display_name")
+        .in("user_id", userIds);
+      profileMap = new Map((profilesData ?? []).map((profile) => [profile.user_id, profile.display_name]));
+    }
+
+    const grouped = comments.reduce((acc, comment) => {
+      const entry: VideoComment = {
+        ...comment,
+        profiles: { display_name: profileMap.get(comment.user_id) ?? null },
+      };
+      if (!acc[comment.video_key]) acc[comment.video_key] = [];
+      acc[comment.video_key].push(entry);
+      return acc;
+    }, {} as Record<string, VideoComment[]>);
+
+    setVideoComments(grouped);
+  };
+
   useEffect(() => {
     if (!profile && !user) return;
     setCheckoutDetails((prev) => ({
@@ -225,6 +291,7 @@ const StudentDashboard = () => {
     fetchIdeas();
     fetchInventory();
     fetchOrderHistory();
+    fetchVideoComments();
 
     // Real-time subscriptions
     const ideasChannel = supabase
@@ -242,10 +309,16 @@ const StudentDashboard = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => fetchOrderHistory())
       .subscribe();
 
+    const commentsChannel = supabase
+      .channel("video-comments-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "video_comments" }, () => fetchVideoComments())
+      .subscribe();
+
     return () => {
       supabase.removeChannel(ideasChannel);
       supabase.removeChannel(inventoryChannel);
       supabase.removeChannel(bookingsChannel);
+      supabase.removeChannel(commentsChannel);
     };
   }, [user?.id]);
 
@@ -526,6 +599,31 @@ const StudentDashboard = () => {
     setBookingId(null);
   };
 
+  const handlePostVideoComment = async (videoKey: string) => {
+    if (!user) {
+      toast.error("Please sign in to comment.");
+      return;
+    }
+
+    const message = (videoCommentDrafts[videoKey] || "").trim();
+    if (!message) return;
+
+    setPostingVideoKey(videoKey);
+    const { error } = await supabase.from("video_comments" as any).insert({
+      video_key: videoKey,
+      user_id: user.id,
+      comment_text: message,
+    } as any);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      setVideoCommentDrafts((prev) => ({ ...prev, [videoKey]: "" }));
+      fetchVideoComments();
+    }
+    setPostingVideoKey(null);
+  };
+
   const statusClass = (s: string) =>
     s === "Review" ? "status-chip status-chip-review" :
     s === "Approved" ? "status-chip status-chip-approved" :
@@ -772,7 +870,18 @@ const StudentDashboard = () => {
             <div className="space-y-3 sm:space-y-4">
               {problemStatements.map((ps, i) => (
                 <AnimateInView key={ps.id} delay={i * 100}>
-                  <div className="brand-card flex items-start gap-3 sm:gap-4">
+                  <div className="brand-card flex flex-col gap-4">
+                    <div className="aspect-video w-full rounded-xl overflow-hidden border border-border bg-muted">
+                      <iframe
+                        src={ps.videoEmbedUrl}
+                        title={`${ps.title} video`}
+                        className="w-full h-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+
+                    <div className="flex items-start gap-3 sm:gap-4">
                     <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 font-serif font-bold text-xs sm:text-sm">
                       {ps.id}
                     </div>
@@ -783,6 +892,50 @@ const StudentDashboard = () => {
                       </div>
                       <p className="text-xs sm:text-sm text-muted-foreground mb-1">Ministry: {ps.ministry}</p>
                       <p className="text-xs sm:text-sm text-muted-foreground">{ps.description}</p>
+                    </div>
+                    </div>
+
+                    <div className="rounded-xl border border-border p-3 sm:p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <MessageCircle className="h-4 w-4" />
+                        <h4 className="font-medium text-sm sm:text-base">Discussion Community</h4>
+                      </div>
+
+                      <div className="space-y-2 max-h-44 overflow-y-auto pr-1 mb-3">
+                        {(videoComments[ps.videoKey] ?? []).map((comment) => (
+                          <div key={comment.id} className="rounded-lg bg-secondary/50 px-3 py-2">
+                            <p className="text-xs font-medium">{comment.profiles?.display_name ?? "Student"}</p>
+                            <p className="text-xs sm:text-sm">{comment.comment_text}</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">{new Date(comment.created_at).toLocaleString()}</p>
+                          </div>
+                        ))}
+                        {(videoComments[ps.videoKey] ?? []).length === 0 && (
+                          <p className="text-xs text-muted-foreground">No comments yet. Start the discussion.</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-start gap-2">
+                        <textarea
+                          rows={2}
+                          value={videoCommentDrafts[ps.videoKey] ?? ""}
+                          onChange={(e) =>
+                            setVideoCommentDrafts((prev) => ({
+                              ...prev,
+                              [ps.videoKey]: e.target.value,
+                            }))
+                          }
+                          placeholder="Add your comment for this video..."
+                          className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+                        />
+                        <button
+                          onClick={() => handlePostVideoComment(ps.videoKey)}
+                          disabled={postingVideoKey === ps.videoKey || !(videoCommentDrafts[ps.videoKey] || "").trim()}
+                          className="pill-btn text-xs px-3 py-2 gap-1.5"
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                          {postingVideoKey === ps.videoKey ? "Posting..." : "Post"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </AnimateInView>
