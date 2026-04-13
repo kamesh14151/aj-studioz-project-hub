@@ -428,18 +428,29 @@ const StudentDashboard = () => {
     if (!user || !editingIdeaId || !editTitle.trim() || !editDesc.trim()) return;
     setSavingIdeaEdit(true);
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("ideas")
       .update({
         title: editTitle.trim(),
         description: editDesc.trim(),
       })
       .eq("id", editingIdeaId)
-      .eq("author_id", user.id);
+      .eq("author_id", user.id)
+      .select("id, title, description")
+      .maybeSingle();
 
     if (error) {
       toast.error(error.message);
+    } else if (!data) {
+      toast.error("Unable to update this idea.");
     } else {
+      setIdeas((prev) =>
+        prev.map((idea) =>
+          idea.id === editingIdeaId
+            ? { ...idea, title: data.title, description: data.description }
+            : idea
+        )
+      );
       toast.success("Idea updated!");
       cancelEditingIdea();
       fetchIdeas();
