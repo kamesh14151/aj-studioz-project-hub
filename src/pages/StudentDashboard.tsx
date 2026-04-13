@@ -711,8 +711,20 @@ const StudentDashboard = () => {
 
         {tab === "problems" && (
           <AnimateInView>
-            <h1 className="display-lg mb-2">Problem Statements</h1>
-            <p className="text-muted-foreground text-sm sm:text-base mb-6 sm:mb-8">Official institutional challenges</p>
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6 sm:mb-8">
+              <div>
+                <h1 className="display-lg mb-2">Problem Statements</h1>
+                <p className="text-muted-foreground text-sm sm:text-base">Official institutional challenges</p>
+              </div>
+              <a
+                href="/problem-statements/problem-statement-title.pdf"
+                target="_blank"
+                rel="noreferrer"
+                className="pill-btn-outline text-xs sm:text-sm px-3 py-2 self-start"
+              >
+                View Problem Statement PDF
+              </a>
+            </div>
             <div className="space-y-3 sm:space-y-4">
               {problemStatements.map((ps, i) => (
                 <AnimateInView key={ps.id} delay={i * 100}>
