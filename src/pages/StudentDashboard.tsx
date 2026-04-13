@@ -738,7 +738,7 @@ const StudentDashboard = () => {
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6 sm:mb-8">
               <div>
                 <h1 className="display-lg mb-2">Problem Statements</h1>
-                <p className="text-muted-foreground text-sm sm:text-base">Official institutional challenges</p>
+                <p className="text-muted-foreground text-sm sm:text-base">Official institutional challenges with ministry and description</p>
               </div>
               <a
                 href="/problem-statements/problem-statement-title.pdf"
@@ -749,6 +749,26 @@ const StudentDashboard = () => {
                 View Problem Statement PDF
               </a>
             </div>
+
+            <div className="brand-card mb-6 sm:mb-8 p-3 sm:p-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <h3 className="font-serif text-sm sm:text-base">Complete Official Institutional Challenges (Full Document)</h3>
+                <a
+                  href="/problem-statements/problem-statement-title.pdf"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="pill-btn-outline text-xs px-3 py-1.5"
+                >
+                  Open Full PDF
+                </a>
+              </div>
+              <iframe
+                src="/problem-statements/problem-statement-title.pdf"
+                title="Official Institutional Challenges"
+                className="w-full h-[420px] sm:h-[520px] rounded-xl border border-border"
+              />
+            </div>
+
             <div className="space-y-3 sm:space-y-4">
               {problemStatements.map((ps, i) => (
                 <AnimateInView key={ps.id} delay={i * 100}>
