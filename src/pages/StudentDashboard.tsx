@@ -76,10 +76,34 @@ interface OrderGroup {
 }
 
 const problemStatements = [
-  { id: 1, title: "Waste Segregation Automation", dept: "ECE", description: "Design a sensor-based system for automated waste classification in campus bins." },
-  { id: 2, title: "Smart Irrigation for Campus Garden", dept: "EEE", description: "Develop a moisture-sensing automated irrigation system for the botanical garden." },
-  { id: 3, title: "Library Seat Availability Tracker", dept: "CSE", description: "Build an IoT system to display real-time seating availability in the library." },
-  { id: 4, title: "Emergency SOS Beacon", dept: "ECE", description: "Create a wearable panic button that alerts campus security with GPS coordinates." },
+  {
+    id: 1,
+    title: "Waste Segregation Automation",
+    dept: "ECE",
+    ministry: "Ministry of Housing and Urban Affairs",
+    description: "Design a sensor-based system for automated waste classification in campus bins.",
+  },
+  {
+    id: 2,
+    title: "Smart Irrigation for Campus Garden",
+    dept: "EEE",
+    ministry: "Ministry of Jal Shakti",
+    description: "Develop a moisture-sensing automated irrigation system for the botanical garden.",
+  },
+  {
+    id: 3,
+    title: "Library Seat Availability Tracker",
+    dept: "CSE",
+    ministry: "Ministry of Education",
+    description: "Build an IoT system to display real-time seating availability in the library.",
+  },
+  {
+    id: 4,
+    title: "Emergency SOS Beacon",
+    dept: "ECE",
+    ministry: "Ministry of Home Affairs",
+    description: "Create a wearable panic button that alerts campus security with GPS coordinates.",
+  },
 ];
 
 const StudentDashboard = () => {
@@ -737,6 +761,7 @@ const StudentDashboard = () => {
                         <h3 className="font-serif text-sm sm:text-base">{ps.title}</h3>
                         <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">{ps.dept}</span>
                       </div>
+                      <p className="text-xs sm:text-sm text-muted-foreground mb-1">Ministry: {ps.ministry}</p>
                       <p className="text-xs sm:text-sm text-muted-foreground">{ps.description}</p>
                     </div>
                   </div>
