@@ -31,3 +31,23 @@ Notes:
 - Admin role assignment is handled by Supabase migrations for allowed test logins.
 - If this user does not exist yet, create it in Supabase Auth Users with the above password.
 - Do not use these credentials in production. Rotate or remove before go-live.
+
+## Vercel Auto-Migrations
+
+This project is configured to run SQL migrations automatically during Vercel build.
+
+Flow on deploy:
+
+- `npm run build:vercel`
+- runs `npm run migrate:vercel`
+- then runs `vite build`
+
+Required Vercel environment variable:
+
+- `SUPABASE_DB_URL` (preferred) or `DATABASE_URL`
+
+Notes:
+
+- Migration files are read from `supabase/migrations` in filename order.
+- Applied migrations are tracked in `public.app_migrations`.
+- If DB URL is missing, migration step is skipped and build continues.
