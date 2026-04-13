@@ -18,3 +18,16 @@ Deploy/update the edge function after setting secrets:
 ```bash
 supabase functions deploy create-checkout
 ```
+
+## Testing Credentials
+
+Use the following credentials only for testing/staging:
+
+- Admin test login: `sona06@gmail.com`
+- Password (testing only): `2006`
+
+Notes:
+
+- Admin role assignment is handled by Supabase migrations for allowed test logins.
+- If this user does not exist yet, create it in Supabase Auth Users with the above password.
+- Do not use these credentials in production. Rotate or remove before go-live.
