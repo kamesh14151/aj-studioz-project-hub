@@ -90,6 +90,11 @@ const StudentDashboard = () => {
   const [showNewIdea, setShowNewIdea] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
+  const [editingIdeaId, setEditingIdeaId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [savingIdeaEdit, setSavingIdeaEdit] = useState(false);
+  const [deletingIdeaId, setDeletingIdeaId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -407,6 +412,67 @@ const StudentDashboard = () => {
     setLoading(false);
   };
 
+  const startEditingIdea = (idea: Idea) => {
+    setEditingIdeaId(idea.id);
+    setEditTitle(idea.title);
+    setEditDesc(idea.description);
+  };
+
+  const cancelEditingIdea = () => {
+    setEditingIdeaId(null);
+    setEditTitle("");
+    setEditDesc("");
+  };
+
+  const handleSaveIdeaEdit = async () => {
+    if (!user || !editingIdeaId || !editTitle.trim() || !editDesc.trim()) return;
+    setSavingIdeaEdit(true);
+
+    const { error } = await supabase
+      .from("ideas")
+      .update({
+        title: editTitle.trim(),
+        description: editDesc.trim(),
+      })
+      .eq("id", editingIdeaId)
+      .eq("author_id", user.id);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Idea updated!");
+      cancelEditingIdea();
+      fetchIdeas();
+    }
+
+    setSavingIdeaEdit(false);
+  };
+
+  const handleDeleteIdea = async (ideaId: string) => {
+    if (!user) return;
+    const shouldDelete = window.confirm("Delete this idea permanently?");
+    if (!shouldDelete) return;
+
+    setDeletingIdeaId(ideaId);
+    const { error } = await supabase
+      .from("ideas")
+      .delete()
+      .eq("id", ideaId)
+      .eq("author_id", user.id);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Idea deleted.");
+      if (editingIdeaId === ideaId) {
+        cancelEditingIdea();
+      }
+      fetchIdeas();
+    }
+
+    setDeletingIdeaId(null);
+  };
+
   const handlePreBook = async (item: InventoryItem) => {
     if (!user || item.available_count <= 0) return;
     setBookingId(item.id);
@@ -558,10 +624,63 @@ const StudentDashboard = () => {
                 <AnimateInView key={idea.id} delay={i * 80}>
                   <div className="brand-card h-full flex flex-col">
                     <div className="flex items-start justify-between mb-3 gap-2">
-                      <h3 className="font-serif text-sm sm:text-base leading-snug flex-1">{idea.title}</h3>
+                      {editingIdeaId === idea.id ? (
+                        <input
+                          type="text"
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                        />
+                      ) : (
+                        <h3 className="font-serif text-sm sm:text-base leading-snug flex-1">{idea.title}</h3>
+                      )}
                       <span className={statusClass(idea.status)}>{idea.status}</span>
                     </div>
-                    <p className="text-xs sm:text-sm text-muted-foreground flex-1 mb-4">{idea.description}</p>
+                    {editingIdeaId === idea.id ? (
+                      <textarea
+                        value={editDesc}
+                        onChange={(e) => setEditDesc(e.target.value)}
+                        rows={3}
+                        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-none mb-4"
+                      />
+                    ) : (
+                      <p className="text-xs sm:text-sm text-muted-foreground flex-1 mb-4">{idea.description}</p>
+                    )}
+                    {idea.author_id === user?.id && (
+                      <div className="flex items-center gap-2 mb-4">
+                        {editingIdeaId === idea.id ? (
+                          <>
+                            <button
+                              onClick={handleSaveIdeaEdit}
+                              disabled={savingIdeaEdit || !editTitle.trim() || !editDesc.trim()}
+                              className="pill-btn text-xs px-3 py-1.5"
+                            >
+                              {savingIdeaEdit ? "Saving..." : "Save"}
+                            </button>
+                            <button
+                              onClick={cancelEditingIdea}
+                              disabled={savingIdeaEdit}
+                              className="pill-btn-outline text-xs px-3 py-1.5"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => startEditingIdea(idea)} className="pill-btn-outline text-xs px-3 py-1.5">
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteIdea(idea.id)}
+                              disabled={deletingIdeaId === idea.id}
+                              className="pill-btn-outline text-xs px-3 py-1.5 border-destructive/60 text-destructive hover:bg-destructive/10"
+                            >
+                              {deletingIdeaId === idea.id ? "Deleting..." : "Delete"}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>{idea.profiles?.display_name ?? "Unknown"}</span>
                       <span>{new Date(idea.created_at).toLocaleDateString()}</span>
