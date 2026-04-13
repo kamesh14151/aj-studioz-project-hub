@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { defaultInventoryCatalog } from "@/data/defaultInventoryCatalog";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import AnimateInView from "@/components/AnimateInView";
@@ -201,7 +202,13 @@ const StudentDashboard = () => {
 
   const fetchInventory = async () => {
     const { data } = await supabase.from("inventory").select("*").order("name");
-    if (data) setInventory(data as InventoryItem[]);
+    if (data && data.length > 0) {
+      setInventory(data as InventoryItem[]);
+      return;
+    }
+
+    // Ensure inventory is visible even before DB migrations are applied.
+    setInventory(defaultInventoryCatalog as InventoryItem[]);
   };
 
   const fetchOrderHistory = async () => {
