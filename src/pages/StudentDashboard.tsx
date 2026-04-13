@@ -95,6 +95,14 @@ interface VideoComment {
   profiles?: { display_name: string | null } | null;
 }
 
+interface CommunityMessage {
+  id: string;
+  user_id: string;
+  message_text: string;
+  created_at: string;
+  profiles?: { display_name: string | null } | null;
+}
+
 const problemStatements: ProblemStatement[] = [
   {
     id: 1,
@@ -155,6 +163,9 @@ const StudentDashboard = () => {
   const [videoComments, setVideoComments] = useState<Record<string, VideoComment[]>>({});
   const [videoCommentDrafts, setVideoCommentDrafts] = useState<Record<string, string>>({});
   const [postingVideoKey, setPostingVideoKey] = useState<string | null>(null);
+  const [communityMessages, setCommunityMessages] = useState<CommunityMessage[]>([]);
+  const [communityMessageDraft, setCommunityMessageDraft] = useState("");
+  const [postingCommunity, setPostingCommunity] = useState(false);
   const [checkoutDetails, setCheckoutDetails] = useState({
     contactName: "",
     contactEmail: "",
@@ -285,6 +296,37 @@ const StudentDashboard = () => {
     setVideoComments(grouped);
   };
 
+  const fetchCommunityMessages = async () => {
+    const { data: messagesData, error: messagesError } = await supabase
+      .from("community_messages" as any)
+      .select("id, user_id, message_text, created_at")
+      .order("created_at", { ascending: false });
+
+    if (messagesError) {
+      toast.error(messagesError.message);
+      return;
+    }
+
+    const messages = (messagesData ?? []) as CommunityMessage[];
+    const userIds = [...new Set(messages.map((message) => message.user_id))];
+
+    let profileMap = new Map<string, string | null>();
+    if (userIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("user_id, display_name")
+        .in("user_id", userIds);
+      profileMap = new Map((profilesData ?? []).map((profile) => [profile.user_id, profile.display_name]));
+    }
+
+    setCommunityMessages(
+      messages.map((message) => ({
+        ...message,
+        profiles: { display_name: profileMap.get(message.user_id) ?? null },
+      }))
+    );
+  };
+
   useEffect(() => {
     if (!profile && !user) return;
     setCheckoutDetails((prev) => ({
@@ -299,6 +341,7 @@ const StudentDashboard = () => {
     fetchInventory();
     fetchOrderHistory();
     fetchVideoComments();
+    fetchCommunityMessages();
 
     // Real-time subscriptions
     const ideasChannel = supabase
@@ -321,11 +364,17 @@ const StudentDashboard = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "video_comments" }, () => fetchVideoComments())
       .subscribe();
 
+    const communityChannel = supabase
+      .channel("community-messages-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "community_messages" }, () => fetchCommunityMessages())
+      .subscribe();
+
     return () => {
       supabase.removeChannel(ideasChannel);
       supabase.removeChannel(inventoryChannel);
       supabase.removeChannel(bookingsChannel);
       supabase.removeChannel(commentsChannel);
+      supabase.removeChannel(communityChannel);
     };
   }, [user?.id]);
 
@@ -631,6 +680,30 @@ const StudentDashboard = () => {
     setPostingVideoKey(null);
   };
 
+  const handlePostCommunityMessage = async () => {
+    if (!user) {
+      toast.error("Please sign in to post.");
+      return;
+    }
+
+    const message = communityMessageDraft.trim();
+    if (!message) return;
+
+    setPostingCommunity(true);
+    const { error } = await supabase.from("community_messages" as any).insert({
+      user_id: user.id,
+      message_text: message,
+    } as any);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      setCommunityMessageDraft("");
+      fetchCommunityMessages();
+    }
+    setPostingCommunity(false);
+  };
+
   const statusClass = (s: string) =>
     s === "Review" ? "status-chip status-chip-review" :
     s === "Approved" ? "status-chip status-chip-approved" :
@@ -872,6 +945,44 @@ const StudentDashboard = () => {
                 title="Official Institutional Challenges"
                 className="w-full h-[420px] sm:h-[520px] rounded-xl border border-border"
               />
+            </div>
+
+            <div className="brand-card mb-6 sm:mb-8 p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <MessageCircle className="h-4 w-4" />
+                <h3 className="font-serif text-sm sm:text-base">Common Community</h3>
+              </div>
+
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1 mb-3">
+                {communityMessages.map((message) => (
+                  <div key={message.id} className="rounded-lg bg-secondary/50 px-3 py-2">
+                    <p className="text-xs font-medium">{message.profiles?.display_name ?? "Student"}</p>
+                    <p className="text-xs sm:text-sm">{message.message_text}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">{new Date(message.created_at).toLocaleString()}</p>
+                  </div>
+                ))}
+                {communityMessages.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No posts yet. Start the community discussion.</p>
+                )}
+              </div>
+
+              <div className="flex items-start gap-2">
+                <textarea
+                  rows={2}
+                  value={communityMessageDraft}
+                  onChange={(e) => setCommunityMessageDraft(e.target.value)}
+                  placeholder="Share an update, question, or idea with everyone..."
+                  className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+                <button
+                  onClick={handlePostCommunityMessage}
+                  disabled={postingCommunity || !communityMessageDraft.trim()}
+                  className="pill-btn text-xs px-3 py-2 gap-1.5"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  {postingCommunity ? "Posting..." : "Post"}
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3 sm:space-y-4">
